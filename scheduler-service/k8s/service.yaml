@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: schevt-mgr
+  name: schevt-mgr-svc
+  namespace: schevt
+spec:
+  type: ClusterIP
+  ports:
+    - name: "80"
+      port: 80
+      targetPort: 9902
+  selector:
+    app: schevt-mgr

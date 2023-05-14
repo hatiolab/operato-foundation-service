@@ -1,0 +1,92 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: servic-broker-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  fsType: ext4
+reclaimPolicy: Delete
+mountOptions:
+  - debug
+volumeBindingMode: Immediate
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: servic-broker-pv-claim
+  namespace: svcbroker
+  labels:
+    app: servic-broker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: servic-broker-storage
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servic-broker
+  namespace: svcbroker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: servic-broker
+      tier: postgresql
+  template:
+    metadata:
+      labels:
+        app: servic-broker
+        tier: postgresql
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:13.3
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: servic-broker-secret
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: servic-broker-pv
+      volumes:
+        - name: servic-broker-pv
+          persistentVolumeClaim:
+            claimName: servic-broker-pv-claim
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: servic-broker-secret
+  namespace: svcbroker
+stringData:
+  POSTGRES_DB: svcbroker
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: abcd1234
+  PGDATA: /var/lib/postgresql/data/pgdata
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: servic-broker
+  name: servic-broker-svc
+  namespace: svcbroker
+spec:
+  type: ClusterIP
+  ports:
+    - name: "5432"
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: servic-broker

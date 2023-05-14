@@ -1,0 +1,45 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: service-broker
+  name: service-broker
+  namespace: svcbroker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: service-broker
+  serviceName: "schevtmgr"
+  template:
+    metadata:
+      labels:
+        app: service-broker
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - image: hatiolab/service-broker:0.0.1
+          imagePullPolicy: Always
+          name: service-broker
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          securityContext:
+            privileged: false
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      restartPolicy: Always
+      serviceAccountName: ""
+      volumes:
+        - name: config-volume
+          configMap:
+            name: service-broker-cfgmap

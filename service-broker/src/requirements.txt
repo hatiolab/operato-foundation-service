@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+lmdb
+psycopg2
+email-validator

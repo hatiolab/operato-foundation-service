@@ -1,0 +1,45 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: pending-queue
+  name: pending-queue
+  namespace: schevt
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pending-queue
+  serviceName: "schevtmgr"
+  template:
+    metadata:
+      labels:
+        app: pending-queue
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - image: hatiolab/pending-queue:0.0.1
+          imagePullPolicy: Always
+          name: pending-queue
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          securityContext:
+            privileged: false
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      restartPolicy: Always
+      serviceAccountName: ""
+      volumes:
+        - name: config-volume
+          configMap:
+            name: pending-queue-cfgmap

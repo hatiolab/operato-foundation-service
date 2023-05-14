@@ -1,0 +1,45 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: schevt-mgr
+  name: schevt-mgr
+  namespace: schevt
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: schevt-mgr
+  serviceName: "schevtmgr"
+  template:
+    metadata:
+      labels:
+        app: schevt-mgr
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - image: hatiolab/schevt-mgr:0.4.0
+          imagePullPolicy: Always
+          name: schevt-mgr
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+          securityContext:
+            privileged: false
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      restartPolicy: Always
+      serviceAccountName: ""
+      volumes:
+        - name: config-volume
+          configMap:
+            name: schevt-mgr-cfgmap

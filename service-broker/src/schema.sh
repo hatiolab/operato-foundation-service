@@ -1,0 +1,1 @@
+strawberry export-schema gql.gql_main:schema > schema.graphql  

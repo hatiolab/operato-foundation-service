@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: service-broker
+  name: service-broker
+  namespace: svcbroker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: service-broker
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: service-broker
+    spec:
+      containers:
+        - image: hatiolab/service-broker:0.0.1
+          imagePullPolicy: Always
+          name: service-broker
+          ports:
+            - containerPort: 9904
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+          securityContext:
+            privileged: false
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: service-broker-cfgmap
+      restartPolicy: Always
+      serviceAccountName: ""
+status:
