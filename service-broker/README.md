@@ -1,5 +1,11 @@
 # Service Broker
 
+![Service Broker Explains](./assets/servicebroker-explains.png "Service Broker Explains")
+
+- 외부 서비스에 웹훅과 같이 특정한 Endpoint를 생성하고 지정해야 할 경우에 사용하기 위한 서비스
+- 사용자가 서비스 엔드포인트를 요청하면 서비스 브로커는 엔드포인트를 생성하고, 사용자가 등록 시에 지정한 어플리케이션 정보(applicaiton, group, operation)를 기반으로 매핑을 수행한다.
+- 생성된 엔드포인트로 데이터가 입력되면 매핑된 정보를 기반으로 해당 서비스에 데이터를 전달한다.
+
 ## MSA 기반의 서비스 브로커
 
 ![MSA Scheduler Service](./assets/servicebroker-service-msa.png "MSA Service Broker")

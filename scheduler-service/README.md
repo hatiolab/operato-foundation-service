@@ -1,5 +1,12 @@
 # 스케줄러 서비스
 
+![Scheduler Explains](./assets/scheduler-explains.png "Scheduler Explains")
+
+- Scheduler에 등록되는 모든 이벤트들은 cron을 포함한 여러 형태의 스케줄 타입 및 값이 지정
+- 사용자가 지정한 스케줄 형태에 따라서 이벤트가 호출되며, 일반적으로 호출된 이벤트는 사용자가 등록 시에 지정한 rest api를 호출 
+- 호출된 이벤트가 실패할 경우 정책에 따라서 일정 시간 이후 재시도 수행
+
+
 ## MSA 기반의 스케줄러 서비스
 
 ![MSA Scheduler Service](./assets/scheduler-service-msa.png "MSA Scheduler Service")

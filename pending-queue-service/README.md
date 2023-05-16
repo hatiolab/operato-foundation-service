@@ -1,5 +1,12 @@
 # Pending Queue Service
 
+![Pending Queue Explains](./assets/pendingqueue-explains.png "Pending Queue Explains")
+
+- Pending Queue에 등록되는 모든 이벤트들은 due 속성을 가지면 해당 속성은 timestamp 값을 포함.
+- 사용자는 특정 시점 이후에 실행이 필요한 이벤트를 등록한다.
+- 스케줄러와는 다르게 해당 이벤트는 특정 시점(due) 이후에 자동으로 실행되지 않으며, 사용자가 pick API를 통해서 수동으로 가져와야 한다.
+- pick 명령이 실행되면 현재 포함되어 있는 event 중에서 due와 priotiry를 고려해서 최우선 순위의 이벤트가 추출된다.
+
 ## MSA 기반의 지연 큐 서비스
 
 ![MSA Scheduler Service](./assets/pendingqueue-service-msa.png "MSA Pending Queue Service")
