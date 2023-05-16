@@ -320,13 +320,25 @@ class ScheduleEventHandler:
         return group_list
 
     def retry_non_recur_event(self, schedule_event):
+        task_info = schedule_event["task"]
         client_info = schedule_event["client"]
         local_queue_key = self.get_localdb_key(client_info)
         base = datetime.now(timezone.utc)
+
+
+        retry_count = task_info.get("retry_count", 0)
+        max_retry_count = task_info.get("max_retry_count", -1)
+        if (max_retry_count != -1) and (retry_count >= max_retry_count):
+            log_info(
+                f"Retry count({retry_count}) is over max_retry_count({max_retry_count})."
+            )
+            self.schedule_db.pop(local_queue_key)
+            return
+
         retry_wait = schedule_event.get("retry_wait", 60)
         schedule_event["next_time"] = datetime.timestamp(base) + retry_wait
-
-        # 5. set the evetn to the localqueue
+        
+        # set the evetn to the localqueue
         self.schedule_db.put(local_queue_key, schedule_event)
 
         handle_event_future = asyncio.run_coroutine_threadsafe(

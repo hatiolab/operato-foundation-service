@@ -20,13 +20,19 @@ class PGQueue(Queue):
         self.initialized: bool = False
         try:
 
-            self.dbconn = pg2.connect(
-                user=db_config.get("id", "postgres"),
-                password=db_config.get("pw", "abcd1234"),
-                host=db_config.get("host", "localhost"),
-                port=db_config.get("port", 5432),
-                database=db_config.get("db", "schedules"),
-            )
+            self.dbconn = None
+            while self.dbconn is None:
+                try:
+                    self.dbconn = pg2.connect(
+                        user=db_config.get("id", "postgres"),
+                        password=db_config.get("pw", "abcd1234"),
+                        host=db_config.get("host", "localhost"),
+                        port=db_config.get("port", 5432),
+                        database=db_config.get("db", "schedules"),
+                    )
+                except pg2.OperationalError:
+                    print("Unable to connect. Retrying...")
+                    time.sleep(5)
 
             # CREATE IF EXISTS
             """

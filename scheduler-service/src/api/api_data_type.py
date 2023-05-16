@@ -40,6 +40,14 @@ class ScheduleTask(BaseModel):
         default=60,
         title="Retry wait time when a non-recurring task(date, delay, now) fails to run",
     )
+    retry_count: Optional[int] = Field(
+        default=0,
+        title="Retry count when a non-recurring task(date, delay, now) fails to run",
+    )
+    max_retry_count: Optional[int] = Field(
+        default=-1,
+        title="Retry count limit",
+    )
 
 
 class Schedule(BaseModel):
