@@ -1,4 +1,4 @@
-# Operato Foundatiton Service
+# Operato Foundation Service
 
 인티그레이션 플랫폼은 엔터프라이즈 아키텍쳐에서 인티그레이션 레이어를 담당하게 될 플랫폼입니다.
 
