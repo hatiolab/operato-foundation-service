@@ -8,7 +8,7 @@ from api.api_method import (
     api_reset,
 )
 
-from api.api_data_type import Schedule, ScheduleAdmin
+from api.api_data_type import Schedule, ScheduleResult, ScheduleResultCount
 from schedule.schedule_event_handler import ScheduleEventHandler
 
 
@@ -35,23 +35,23 @@ async def shutdown_event():
 
 
 @fast_api.post("/schedules")
-async def register_schedule(inputs: Schedule) -> dict:
+async def register_schedule(inputs: Schedule) -> ScheduleResult:
     """
     register a schedule event
     """
-    return api_register(inputs.dict())
+    return api_register(inputs)
 
 
 @fast_api.post("/schedules/{id}/update")
-async def update_schedule(id: str, inputs: Schedule) -> dict:
+async def update_schedule(id: str, inputs: Schedule) -> ScheduleResult:
     """
     register a schedule event
     """
-    return api_register(inputs.dict())
+    return api_register(inputs)
 
 
 @fast_api.delete("/schedules/{id}")
-async def delete_schedule(id: str) -> dict:
+async def delete_schedule(id: str) -> ScheduleResultCount:
     """
     unregister a schedule event
     """
@@ -65,7 +65,7 @@ async def delete_schedule(
     type: str = "",
     key: str = "",
     operation: str = "",
-) -> dict:
+) -> ScheduleResultCount:
     """
     unregister a schedule event
     """

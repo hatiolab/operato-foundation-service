@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import HTTPException
 
+from api.api_data_type import Schedule
 from config import Config
 from direct_queue.local_queue import LocalQueue
 from direct_queue.pg_queue import PGQueue
@@ -102,8 +103,10 @@ class ScheduleEventHandler:
             ]
         )
 
-    def register(self, schedule_event: dict, application_init: bool = False):
+    def register(self, schedule: Schedule, application_init: bool = False):
         try:
+            schedule_event = schedule.dict()
+
             client_info = schedule_event.get("client")
             local_queue_key = self.get_localdb_key(client_info)
 

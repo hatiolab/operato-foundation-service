@@ -65,6 +65,14 @@ class Schedule(BaseModel):
     )
     task: ScheduleTask
 
+class ScheduleResult(BaseModel):
+    name: str = Field(default="", title="Schedule name")
+    client: ScheduleClient
+    id: str = Field(default="", title="Schedule id")
+
+class ScheduleResultCount(BaseModel):
+    count: int = Field(default=0, title="Schedule count")
+
 
 class ScheduleAdmin(BaseModel):
     user: str

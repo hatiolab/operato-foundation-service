@@ -1,5 +1,6 @@
 import traceback
 
+from api.api_data_type import Schedule
 from schedule.schedule_event_handler import ScheduleEventHandler
 
 import sys
@@ -14,10 +15,10 @@ log_warning = log_message.warning
 log_error = log_message.error
 
 
-def api_register(input_req):
-    log_info(f"request registration: {input_req}")
+def api_register(schedule: Schedule):
+    log_info(f"request registration: {schedule.dict()}")
     schedule_register = ScheduleEventHandler()
-    return schedule_register.register(input_req)
+    return schedule_register.register(schedule)
 
 
 def api_delete_schedule(
