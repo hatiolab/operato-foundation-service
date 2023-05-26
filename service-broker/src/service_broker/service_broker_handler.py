@@ -1,12 +1,13 @@
 
 import uuid
 from fastapi import HTTPException
+import json
+import requests
 
 from config import Config
 from direct_queue.local_queue import LocalQueue
 from direct_queue.pg_queue import PGQueue
 from api.api_data_type import ServiceInput
-from task.task_rest import TaskRest
 
 
 import sys
@@ -41,7 +42,7 @@ class ServiceBrokerHandler:
                 
                 cls._init = True
             except Exception as ex:
-                raise HTTPException(status_code=500, detail=f"Exception: {ex}")
+                raise HTTPException(status_code=500, detail=f"{ex}")
 
     def initialize(self):
         try:
@@ -77,7 +78,7 @@ class ServiceBrokerHandler:
                     result_list.append(service)
             return result_list
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"{ex}") 
+            raise HTTPException(status_code=404, detail=f"Not found service with the given information.")
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
         
@@ -94,9 +95,9 @@ class ServiceBrokerHandler:
                     
             return found_service
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"Exception: {ex}")
+            raise HTTPException(status_code=404, detail=f"Not found service with the given id: {id}")
         except Exception as ex:
-            raise HTTPException(status_code=500, detail=f"Exception: {ex}")
+            raise HTTPException(status_code=500, detail=f"{ex}")
         
     def delete_service_list(self, service: ServiceInput):
         result_list = list()
@@ -111,7 +112,7 @@ class ServiceBrokerHandler:
                 raise ValueError
             return result_list
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"{ex}") 
+            raise HTTPException(status_code=404, detail="Not found service with the given information.") 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
         
@@ -128,7 +129,7 @@ class ServiceBrokerHandler:
                 raise ValueError
             return found_service
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"{ex}") 
+            raise HTTPException(status_code=404, detail=f"Not found service with id: {id}")
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
 
@@ -150,26 +151,13 @@ class ServiceBrokerHandler:
             # TODO: notificate found_service to the service here.
             print(f"found_service: {found_service}")
 
+            url = Config.get("scheduler", "registration")
+            response = requests.post(url, headers={"Content-Type": "application/json"}, data=json.dumps(found_service))
+            
+            #TODO: change result
             return found_service       
         except ValueError as ex:
             raise HTTPException(status_code=404, detail=f"{ex}") 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
-        
-    async def handle_rest(self, callback: str, data: str):
-        callback_info = {
-            "host": "...",
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "data": {
-                "name": "jinwon"
-            }
-        }
-        
-        task_rest = TaskRest()
-        task_rest.connect(callback_info)
-        await task_rest.run(callback_info["data"])
 
-
-        

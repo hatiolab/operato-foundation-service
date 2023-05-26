@@ -12,7 +12,6 @@ Schedule Interface Definitions
 class ScheduleTaskFailurePolicy(str, Enum):
     IGNORE = "ignore"
     RETRY = "retry"
-    RETRY_DLQ = "retry_dlq"
 
 
 class ScheduleClient(BaseModel):
@@ -34,7 +33,7 @@ class ScheduleTask(BaseModel):
     )
     failed_policy: Optional[ScheduleTaskFailurePolicy] = Field(
         default=ScheduleTaskFailurePolicy.IGNORE,
-        title="Task failure policy [ignore | retry | retry_dlq]",
+        title="Task failure policy [ignore | retry]",
     )
     retry_wait: Optional[int] = Field(
         default=60,

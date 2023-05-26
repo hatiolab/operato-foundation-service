@@ -29,7 +29,6 @@ Type Declaration
 class ScheduleTaskFailurePolicy(Enum):
     IGNORE = "ignore"
     RETRY = "retry"
-    RETRY_DLQ = "retry_dlq"
 
 
 @strawberry.input
