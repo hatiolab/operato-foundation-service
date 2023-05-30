@@ -39,8 +39,8 @@ def api_delete_service_with_id(id: str) -> ServiceOutput:
     pending_event_handler = ServiceBrokerHandler()
     return pending_event_handler.delete_service_with_id(id)
 
-def api_handle_endpoint(application: str, group:str, operation:str, id:str) -> ServiceEndpointResult:
-    log_info(f"called api_handle_endpoint with {application}, {group}, {operation}, {id}")
+def api_handle_endpoint(application: str, group:str, operation:str, id:str, body: dict) -> ServiceEndpointResult:
+    log_info(f"called api_handle_endpoint with {application}, {group}, {operation}, {id}, {body}")
     pending_event_handler = ServiceBrokerHandler()
-    return pending_event_handler.handle_endpoint(application, group, operation, id)
+    return pending_event_handler.handle_endpoint(application, group, operation, id, body)
 

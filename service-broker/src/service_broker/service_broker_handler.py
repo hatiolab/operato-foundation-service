@@ -1,7 +1,6 @@
 
 import uuid
 from fastapi import HTTPException
-import json
 import requests
 
 from config import Config
@@ -22,6 +21,10 @@ log_error = log_message.error
 
 
 class ServiceBrokerHandler:
+    FAILED_CONN_RETRY_COUNT = 10
+    FAILED_CONN_RETRY_WAIT = 120 # 2 minutes
+
+
     # singleton constructor set
     def __new__(cls, *args, **kwargs):
         if not hasattr(cls, "_instance"):
@@ -42,7 +45,7 @@ class ServiceBrokerHandler:
                 
                 cls._init = True
             except Exception as ex:
-                raise HTTPException(status_code=500, detail=f"{ex}")
+                raise HTTPException(status_code=500, detail=f"Exception: {ex}")
 
     def initialize(self):
         try:
@@ -78,7 +81,7 @@ class ServiceBrokerHandler:
                     result_list.append(service)
             return result_list
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"Not found service with the given information.")
+            raise HTTPException(status_code=404, detail=f"{ex}") 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
         
@@ -95,9 +98,9 @@ class ServiceBrokerHandler:
                     
             return found_service
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"Not found service with the given id: {id}")
+            raise HTTPException(status_code=404, detail=f"Exception: {ex}")
         except Exception as ex:
-            raise HTTPException(status_code=500, detail=f"{ex}")
+            raise HTTPException(status_code=500, detail=f"Exception: {ex}")
         
     def delete_service_list(self, service: ServiceInput):
         result_list = list()
@@ -112,7 +115,7 @@ class ServiceBrokerHandler:
                 raise ValueError
             return result_list
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail="Not found service with the given information.") 
+            raise HTTPException(status_code=404, detail=f"{ex}") 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
         
@@ -129,12 +132,12 @@ class ServiceBrokerHandler:
                 raise ValueError
             return found_service
         except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"Not found service with id: {id}")
+            raise HTTPException(status_code=404, detail=f"{ex}") 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"{ex}")
 
 
-    def handle_endpoint(self, application: str, group: str, operation: str, id: str):
+    def handle_endpoint(self, application: str, group: str, operation: str, id: str, body: dict):
         log_info(f"handle_endpoint: {application}, {group}, {operation}, {id}")
         try:
             service_list = self.get_service_list(application, group, operation)
@@ -149,15 +152,23 @@ class ServiceBrokerHandler:
                 raise ValueError
             
             # TODO: notificate found_service to the service here.
-            print(f"found_service: {found_service}")
+            client_connection = found_service["service_callback"]
 
-            url = Config.get("scheduler", "registration")
-            response = requests.post(url, headers={"Content-Type": "application/json"}, data=json.dumps(found_service))
-            
-            #TODO: change result
-            return found_service       
-        except ValueError as ex:
-            raise HTTPException(status_code=404, detail=f"{ex}") 
+            # 
+            service_result = self.send_to_service(client_connection, body)
+
+            return service_result       
         except Exception as ex:
-            raise HTTPException(status_code=500, detail=f"{ex}")
-
+            raise ex
+        
+    def send_to_service(self, callback: str, body: dict):
+        try:
+            res = requests.post(callback["host"], headers=callback["headers"], data=body)
+            log_debug(f"result: {res.status_code}")
+            if res.status_code == 200:
+                return res.json()
+            else:
+                raise HTTPException(status_code=res.status_code, detail=f"Error: {res.status_code}")
+        except HTTPException as ex:
+            raise ex
+        

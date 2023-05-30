@@ -79,10 +79,10 @@ async def delete_service(id: str) -> ServiceOutput:
 
 
 @fast_api.post("/endpoint/{application}/{group}/{operation}/{id}")
-async def handle_endpoints(application: str, group: str, operation: str, id: str) -> ServiceOutput:
+async def handle_endpoints(application: str, group: str, operation: str, id: str, body: dict) -> dict:
     """
     handle a callback endpoint with selectable filters(application, group, operation, id)
     
     """
-    return api_handle_endpoint(application, group, operation, id)
+    return api_handle_endpoint(application, group, operation, id, body)
 
