@@ -22,6 +22,7 @@ log_error = log_message.error
 class ScheduleTaskFailurePolicy(str, Enum):
     IGNORE = "ignore"
     RETRY = "retry"
+    RETRY_DLQ = "retry_dlq"
 
 
 class ScheduleTaskStatus:

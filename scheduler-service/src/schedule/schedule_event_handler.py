@@ -1,6 +1,7 @@
 import os
 import asyncio
 import uuid
+import json
 from datetime import datetime, timezone
 from fastapi import HTTPException
 
@@ -74,7 +75,8 @@ class ScheduleEventHandler:
                 schedule_event = value
                 if schedule_event["instance"] == self.instance_name:
                     log_info(f'registering {schedule_event["name"]}')
-                    self.register(schedule_event, application_init=True)
+                    schedule = Schedule(**schedule_event)
+                    self.register(schedule, application_init=True)
 
             log_info("initialization done..")
         except Exception as ex:
@@ -112,13 +114,13 @@ class ScheduleEventHandler:
 
             # 1. check if unique key(operation) is duplicated.
             if local_queue_key in self.running_schedules:
-                self.handle_duplicated_event(schedule_event)
+                schedule_event = self.handle_duplicated_event(schedule_event)
 
             # 1.1. set the insance name
             schedule_event["instance"] = self.instance_name
 
             # 2. store this schedule_event to timastamp db with response id
-            if not application_init:
+            if schedule_event.get("id", "") == "":
                 resp_id = uuid.uuid4()
                 schedule_event["id"] = str(resp_id)
 
@@ -170,6 +172,15 @@ class ScheduleEventHandler:
         except Exception as ex:
             print(f"Exception: {ex}")
             raise ex
+        
+    def update_schedule_with_other(self, src_schedule: dict, dst_schedule: dict):
+        dst_schedule["name"] = src_schedule["name"]
+        dst_schedule["client"] = src_schedule["client"]
+        dst_schedule["type"] = src_schedule["type"] 
+        dst_schedule["schedule"] = src_schedule["schedule"]
+        dst_schedule["timezone"] = src_schedule["timezone"]
+        dst_schedule["task"] = src_schedule["task"]
+
 
     def handle_duplicated_event(self, schedule_event: dict):
         log_info(f"started to handle the duplicated event: {schedule_event}")
@@ -178,12 +189,18 @@ class ScheduleEventHandler:
         local_key = self.get_localdb_key(client_info)
 
         # 1. delete the previous event and cancel the current event
-        self.schedule_db.pop(local_key)
         future_event = self.running_schedules.pop(local_key, None)
         future_event.cancel() if future_event else None
 
+        existed_schedule = self.schedule_db.pop(local_key)
+        existed_schedule = json.loads(existed_schedule.decode("utf-8"))
+
+        self.update_schedule_with_other(schedule_event, existed_schedule)
+
         # 2. update the record for the current schedule event
-        self.save_schevt_to_db("deleted", schedule_event)
+        self.save_schevt_to_db("changed", existed_schedule)
+
+        return existed_schedule
 
     def unregister(self, input_resp_id: str):
         try:

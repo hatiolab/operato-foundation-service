@@ -12,6 +12,7 @@ Schedule Interface Definitions
 class ScheduleTaskFailurePolicy(str, Enum):
     IGNORE = "ignore"
     RETRY = "retry"
+    RETRY_DLQ = "retry_dlq"
 
 
 class ScheduleClient(BaseModel):
@@ -33,7 +34,7 @@ class ScheduleTask(BaseModel):
     )
     failed_policy: Optional[ScheduleTaskFailurePolicy] = Field(
         default=ScheduleTaskFailurePolicy.IGNORE,
-        title="Task failure policy [ignore | retry]",
+        title="Task failure policy [ignore | retry | retry_dlq]",
     )
     retry_wait: Optional[int] = Field(
         default=60,
@@ -63,6 +64,7 @@ class Schedule(BaseModel):
         title="Timezone, should be assigned when schedule type is one of date or cron type",
     )
     task: ScheduleTask
+    id: Optional[str] = Field(default="", title="Schedule id")
 
 class ScheduleResult(BaseModel):
     name: str = Field(default="", title="Schedule name")
