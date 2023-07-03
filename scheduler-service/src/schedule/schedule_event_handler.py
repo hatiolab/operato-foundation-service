@@ -148,14 +148,15 @@ class ScheduleEventHandler:
             self.save_schevt_to_db("register", schedule_event)
 
             # 6. start a schedule event task
-            handle_event_future = asyncio.run_coroutine_threadsafe(
-                self.handle_event(local_queue_key, schedule_event.copy(), delay),
-                asyncio.get_event_loop(),
-            )
+            self.run_event_handler(local_queue_key, delay)
+            # handle_event_future = asyncio.run_coroutine_threadsafe(
+            #     self.handle_delay(delay),
+            #     asyncio.get_event_loop(),
+            # )
 
-            # 7. add the name of the current schedlue event to event_name list.
-            #  to check the duplicated schedule name later
-            self.running_schedules[local_queue_key] = handle_event_future
+            # # 7. add the name of the current schedlue event to event_name list.
+            # #  to check the duplicated schedule name later
+            # self.running_schedules[local_queue_key] = handle_event_future
 
             # 8. return the result with the response id
             return {
@@ -172,15 +173,14 @@ class ScheduleEventHandler:
         except Exception as ex:
             print(f"Exception: {ex}")
             raise ex
-        
+
     def update_schedule_with_other(self, src_schedule: dict, dst_schedule: dict):
         dst_schedule["name"] = src_schedule["name"]
         dst_schedule["client"] = src_schedule["client"]
-        dst_schedule["type"] = src_schedule["type"] 
+        dst_schedule["type"] = src_schedule["type"]
         dst_schedule["schedule"] = src_schedule["schedule"]
         dst_schedule["timezone"] = src_schedule["timezone"]
         dst_schedule["task"] = src_schedule["task"]
-
 
     def handle_duplicated_event(self, schedule_event: dict):
         log_info(f"started to handle the duplicated event: {schedule_event}")
@@ -345,7 +345,6 @@ class ScheduleEventHandler:
         local_queue_key = self.get_localdb_key(client_info)
         base = datetime.now(timezone.utc)
 
-
         retry_count = task_info.get("retry_count", 0)
         max_retry_count = task_info.get("max_retry_count", -1)
         if (max_retry_count != -1) and (retry_count >= max_retry_count):
@@ -356,16 +355,18 @@ class ScheduleEventHandler:
             return
 
         retry_wait = schedule_event.get("retry_wait", 60)
-        schedule_event["next_time"] = datetime.timestamp(base) + retry_wait
-        
+        schedule_event["next"] = datetime.timestamp(base) + retry_wait
+
         # set the evetn to the localqueue
         self.schedule_db.put(local_queue_key, schedule_event)
 
-        handle_event_future = asyncio.run_coroutine_threadsafe(
-            self.handle_event(local_queue_key, schedule_event.copy(), retry_wait),
-            asyncio.get_event_loop(),
-        )
-        self.running_schedules[local_queue_key] = handle_event_future
+        # run event handler
+        self.run_event_handler(local_queue_key, retry_wait)
+        # handle_event_future = asyncio.run_coroutine_threadsafe(
+        #     self.handle_delay(retry_wait),
+        #     asyncio.get_event_loop(),
+        # )
+        # self.running_schedules[local_queue_key] = handle_event_future
 
     def register_next(self, schedule_event):
         try:
@@ -383,15 +384,18 @@ class ScheduleEventHandler:
                 # 1.2. set the next timestamp
                 input_data_task["next"] = next_time
 
+                input_data_task["status"] = ScheduleTaskStatus.IDLE
+
                 # 1.3. set the evetn to the localqueue
                 self.schedule_db.put(local_queue_key, schedule_event)
 
                 # 1.4. run handle_event
-                handle_event_future = asyncio.run_coroutine_threadsafe(
-                    self.handle_event(local_queue_key, schedule_event.copy(), delay),
-                    asyncio.get_event_loop(),
-                )
-                self.running_schedules[local_queue_key] = handle_event_future
+                self.run_event_handler(local_queue_key, delay)
+                # handle_event_future = asyncio.run_coroutine_threadsafe(
+                #     self.handle_delay(delay),
+                #     asyncio.get_event_loop(),
+                # )
+                # self.running_schedules[local_queue_key] = handle_event_future
             # 2. check if scheluer event type is non-recurring
             else:
                 task_info = schedule_event.get("task")
@@ -517,6 +521,69 @@ class ScheduleEventHandler:
 
             # 6. put the next schedule
             self.register_next(schedule_event)
+
+        except Exception as ex:
+            log_error(f"Exception: {ex}")
+
+    def run_event_handler(self, local_queue_key, delay) -> None:
+        # start a schedule event task
+        handle_event_future = asyncio.run_coroutine_threadsafe(
+            self.handle_delay(delay),
+            asyncio.get_event_loop(),
+        )
+
+        # add the name of the current schedlue event to event_name list.
+        # to check the duplicated schedule name later
+        self.running_schedules[local_queue_key] = handle_event_future
+        return handle_event_future
+
+    async def handle_delay(self, delay):
+        try:
+            log_info(f"handle_event start: after {delay}")
+
+            await asyncio.sleep(delay)
+
+            # 1. get the schedule with the timestamp before now
+            now = datetime.now().timestamp()
+            for key, schedule_event in self.schedule_db.get_key_value_list(False):
+                task_info = schedule_event["task"]
+                print(f"start task: {task_info}")
+
+                if task_info["next"] <= now:
+                    try:
+                        # 3. run a task based on task parameters
+                        task_cls = TaskManager.get(task_info["type"])
+                        task = task_cls()
+
+                        task.connect(**task_info)
+                        res = await task.run(**schedule_event)
+                        log_debug(f"handle_event done: {key}, res: {str(res)}")
+                        # 4. set the lastRun
+                        task_info["lastRun"] = datetime.now().strftime(
+                            "%Y-%m-%dT%H:%M:%S"
+                        )
+                        # 5. update the status of this task
+                        history_db_status = ""
+                        if res:
+                            # 5.1 put it into the queue with status 'Done'
+                            task_info["status"] = ScheduleTaskStatus.DONE
+                            task_info["iteration"] += 1
+                            task_info["retry_count"] = 0
+                            self.schedule_db.put(key, schedule_event)
+                            history_db_status = "done"
+                        else:
+                            # 5.2 put it into the queue with status 'Failed'
+                            task_info["status"] = ScheduleTaskStatus.FAILED
+                            task_info["retry_count"] += 1
+                            self.schedule_db.put(key, schedule_event)
+                            history_db_status = "retry"
+
+                        self.save_schevt_to_db(history_db_status, schedule_event)
+
+                        # 6. put the next schedule
+                        self.register_next(schedule_event)
+                    except Exception as ex:
+                        log_error(f"Exception: {ex}")
 
         except Exception as ex:
             log_error(f"Exception: {ex}")

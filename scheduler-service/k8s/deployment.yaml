@@ -7,7 +7,7 @@ metadata:
   name: schevt-mgr
   namespace: schevt
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: schevt-mgr
@@ -19,7 +19,7 @@ spec:
         app: schevt-mgr
     spec:
       containers:
-        - image: hatiolab/schevt-mgr:0.4.0
+        - image: hatiolab/schevt-mgr:0.4.1
           imagePullPolicy: Always
           name: schevt-mgr
           ports:

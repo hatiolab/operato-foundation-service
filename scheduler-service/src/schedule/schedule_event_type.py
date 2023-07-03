@@ -28,6 +28,7 @@ class ScheduleTaskFailurePolicy(str, Enum):
 class ScheduleTaskStatus:
     IDLE = "idle"
     WAITING = "waiting"
+    PROCESSING = "processing"
     RETRY = "retry"
     DONE = "done"
     FAILED = "failed"
@@ -106,9 +107,5 @@ class ScheduleType:
             delay = next_time - datetime.timestamp(base)
         else:
             raise Exception("Invalid schedule type")
-
-        log_info(
-            f'schedule({schedule_event["name"]}), next_time({int(next_time)}), delay({delay})'
-        )
 
         return (int(next_time), delay if delay >= 0 else 0)
