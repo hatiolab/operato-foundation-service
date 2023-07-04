@@ -148,7 +148,7 @@ class ScheduleEventHandler:
             self.save_schevt_to_db("register", schedule_event)
 
             # 6. start a schedule event task
-            self.run_event_handler(local_queue_key, delay)
+            self.run_event_handler(local_queue_key, delay, schedule_event)
             # handle_event_future = asyncio.run_coroutine_threadsafe(
             #     self.handle_delay(delay),
             #     asyncio.get_event_loop(),
@@ -361,7 +361,7 @@ class ScheduleEventHandler:
         self.schedule_db.put(local_queue_key, schedule_event)
 
         # run event handler
-        self.run_event_handler(local_queue_key, retry_wait)
+        self.run_event_handler(local_queue_key, retry_wait, schedule_event)
         # handle_event_future = asyncio.run_coroutine_threadsafe(
         #     self.handle_delay(retry_wait),
         #     asyncio.get_event_loop(),
@@ -390,7 +390,7 @@ class ScheduleEventHandler:
                 self.schedule_db.put(local_queue_key, schedule_event)
 
                 # 1.4. run handle_event
-                self.run_event_handler(local_queue_key, delay)
+                self.run_event_handler(local_queue_key, delay, schedule_event)
                 # handle_event_future = asyncio.run_coroutine_threadsafe(
                 #     self.handle_delay(delay),
                 #     asyncio.get_event_loop(),
@@ -525,10 +525,10 @@ class ScheduleEventHandler:
         except Exception as ex:
             log_error(f"Exception: {ex}")
 
-    def run_event_handler(self, local_queue_key, delay) -> None:
+    def run_event_handler(self, local_queue_key, delay, schedule_event=None) -> None:
         # start a schedule event task
         handle_event_future = asyncio.run_coroutine_threadsafe(
-            self.handle_delay(delay),
+            self.handle_event(local_queue_key, schedule_event, delay),
             asyncio.get_event_loop(),
         )
 
@@ -545,23 +545,34 @@ class ScheduleEventHandler:
 
             # 1. get the schedule with the timestamp before now
             now = datetime.now().timestamp()
+            key_value_list = self.schedule_db.get_key_value_list(False)
+            print("**** key_value_list: ", len(key_value_list))
+
             for key, schedule_event in self.schedule_db.get_key_value_list(False):
                 task_info = schedule_event["task"]
-                print(f"start task: {task_info}")
-
-                if task_info["next"] <= now:
+                print(f"*#* ({key}) entry: ", task_info["status"])
+                if (
+                    task_info["next"] <= now
+                    and task_info["status"] != ScheduleTaskStatus.PROCESSING
+                ):
                     try:
+                        # ...
+                        task_info["status"] = ScheduleTaskStatus.PROCESSING
+                        self.schedule_db.put(key, schedule_event)
+
                         # 3. run a task based on task parameters
                         task_cls = TaskManager.get(task_info["type"])
                         task = task_cls()
 
                         task.connect(**task_info)
+                        print(f"task run: {task_info}")
                         res = await task.run(**schedule_event)
                         log_debug(f"handle_event done: {key}, res: {str(res)}")
                         # 4. set the lastRun
                         task_info["lastRun"] = datetime.now().strftime(
                             "%Y-%m-%dT%H:%M:%S"
                         )
+
                         # 5. update the status of this task
                         history_db_status = ""
                         if res:
