@@ -3,9 +3,9 @@ from abc import *
 
 class ScheduleQueue(metaclass=ABCMeta):
     @abstractmethod
-    def put(self, tstamp, tdata, dlq=False):
+    def put(self, id, name, next_schedule, payload):
         pass
 
     @abstractmethod
-    def pop(self, key, dlq=False):
+    def pop(self):
         pass

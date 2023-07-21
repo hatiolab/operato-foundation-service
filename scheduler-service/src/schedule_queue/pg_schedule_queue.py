@@ -22,7 +22,7 @@ class PGScheduleQueue(ScheduleQueue):
                         password=db_config.get("pw", "abcd1234"),
                         host=db_config.get("host", "localhost"),
                         port=db_config.get("port", 5432),
-                        database=db_config.get("db", "schedule_queue"),
+                        database=db_config.get("db", "scheduler"),
                     )
                 except pg2.OperationalError:
                     print("Unable to connect. Retrying...")
@@ -100,7 +100,7 @@ class PGScheduleQueue(ScheduleQueue):
         WHERE sq.id = (
             SELECT sqInner.id FROM {table_name} sqInner
             WHERE sqInner.processing_started_at IS NULL
-            ORDER By sqInner.next_schedule DESC
+            ORDER By sqInner.next_schedule ASC
             LIMIT 1
             FOR UPDATE
         )
