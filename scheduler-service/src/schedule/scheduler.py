@@ -55,8 +55,8 @@ class Scheduler:
 
         # 1. pop the schedule with the lowest next_schedule value
         scheduler = cls()
-        # schedule = scheduler.schedule_queue.pop()
-        # print(f"schedule: {schedule}")
+        schedule = scheduler.schedule_queue.pop()
+        print(f"schedule: {schedule}")
 
         # TODO: 0.5(500ms) is a part of this application configuration.
         if not scheduler.finalized:
@@ -172,7 +172,7 @@ class Scheduler:
             if type(schedule_id) is not str or schedule_id == "":
                 raise Exception(f"schedule_id is not available.. {schedule_id}")
 
-            (_, schedule) = self.schedule_queue.delete(schedule_id)
+            (_, schedule) = self.schedule_queue.delete_with_id(schedule_id)
             if schedule:
                 self.put_event_to_history_db("unregister", schedule)
 
@@ -191,7 +191,7 @@ class Scheduler:
                     status_code=400, detail="Bad Request(No valid input parameters)"
                 )
 
-            deleted_list = self.schedule_queue.delete(schedule_id)
+            deleted_list = self.schedule_queue.delete_with_id(schedule_id)
 
             if len(deleted_list) == 0:
                 raise HTTPException(status_code=404, detail="Item not found")

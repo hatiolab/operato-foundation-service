@@ -72,7 +72,7 @@ def api_get_schedules_with_client(
     dlq: bool = False,
 ) -> list:
     log_info(
-        f"request get_schedules - group({group}), application({application}), operation({operation}), key({key}, type({client_type}))"
+        f"request get_schedules - group({client_group}), application({client_application}), operation({client_operation}), key({client_key}, type({client_type}))"
     )
     schedule_handler = Scheduler()
     return schedule_handler.get_schedules_with_client(

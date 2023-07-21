@@ -74,6 +74,11 @@ class PGScheduleQueue(ScheduleQueue):
         if not self.initialized:
             raise Exception("Database is not initialized.")
 
+    def _generate_schedule_dict(self, id: str, payload: str) -> dict:
+        payload_dict = json.loads(payload) if type(payload) == str else payload
+        payload_dict["id"] = id
+        return payload_dict
+
     def put(self, id, name, next_schedule, payload):
         self.check_database_initialized()
 
@@ -102,12 +107,12 @@ class PGScheduleQueue(ScheduleQueue):
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
         sql_delete = f"""
-        DELETE FROM {table_name} WHERE id = %s RETRUNING id, payload
+        DELETE FROM {table_name} WHERE id = %s RETURNING id, payload
         
         """
 
         with self.dbconn.cursor() as cursor:
-            cursor.execute(sql_delete, (id))
+            cursor.execute(sql_delete, (id,))
             fetch_results = cursor.fetchall()
 
         self.dbconn.commit()
@@ -115,8 +120,13 @@ class PGScheduleQueue(ScheduleQueue):
         assert len(fetch_results) <= 1
 
         # TODO: convert payload to dict like 'json.loads(existed_schedule.decode("utf-8"))'
-
-        return fetch_results[0] if len(fetch_results) == 1 else (None, None)
+        results = list()
+        for fetch_result in fetch_results:
+            if len(fetch_result) > 0:
+                results.append(
+                    self._generate_schedule_dict(fetch_result[0], fetch_result[1])
+                )
+        return results
 
     def delete_with_client(
         self,
@@ -137,7 +147,7 @@ class PGScheduleQueue(ScheduleQueue):
         )
 
         for result in results:
-            self.delete_with_id(result[0])
+            self.delete_with_id(result["id"])
 
         return results
 
@@ -156,8 +166,6 @@ class PGScheduleQueue(ScheduleQueue):
             with self.dbconn.cursor() as cursor:
                 cursor.execute(sql_get, (id,))
                 fetch_results = cursor.fetchall()
-
-            self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
             fetch_results = None
@@ -166,7 +174,10 @@ class PGScheduleQueue(ScheduleQueue):
 
         # TODO: convert payload to dict like 'json.loads(existed_schedule.decode("utf-8"))'
 
-        return fetch_results[0] if len(fetch_results) == 1 else (None, None, None, None)
+        return [
+            self._generate_schedule_dict(fetch_result[0], fetch_result[3])
+            for fetch_result in fetch_results
+        ]
 
     def get_with_name(self, name):
         self.check_database_initialized()
@@ -213,7 +224,7 @@ class PGScheduleQueue(ScheduleQueue):
         
         """
 
-        result_list = list()
+        results = list()
 
         try:
             with self.dbconn.cursor() as cursor:
@@ -230,7 +241,7 @@ class PGScheduleQueue(ScheduleQueue):
                         fetched__type,
                     ] = fetched_name.split(",")
 
-                result_list = [
+                results = [
                     fetch_result
                     for fetch_result in fetch_results
                     if (not client_operation or fetched_operation == client_operation)
@@ -246,9 +257,11 @@ class PGScheduleQueue(ScheduleQueue):
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
-            result_list = None
+            results = None
 
-        return result_list
+        return [
+            self._generate_schedule_dict(result[0], result[2]) for result in results
+        ]
 
     def pop(self):
         self.check_database_initialized()
@@ -260,7 +273,7 @@ class PGScheduleQueue(ScheduleQueue):
         UPDATE {table_name} as sq SET processing_started_at = '{str(datetime.utcnow())}'
         WHERE sq.id = (
             SELECT sqInner.id FROM {table_name} sqInner
-            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
+            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule < {int(time.time())}
             ORDER By sqInner.next_schedule ASC
             LIMIT 1
             FOR UPDATE
@@ -278,4 +291,7 @@ class PGScheduleQueue(ScheduleQueue):
             print(ex, file=sys.stderr)
             pop_results = None
 
-        return pop_results
+        return [
+            self._generate_schedule_dict(pop_result[0], pop_result[3])
+            for pop_result in pop_results
+        ]
