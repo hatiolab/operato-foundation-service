@@ -55,6 +55,7 @@ class PGScheduleQueue(ScheduleQueue):
                         CREATE INDEX IF NOT EXISTS ix_schedule_queue_pop on schedule_queue (next_schedule ASC)
                         INCLUDE (id)
                         WHERE processing_started_at IS NULL;
+
                     """
                 )
 
@@ -75,7 +76,10 @@ class PGScheduleQueue(ScheduleQueue):
 
     def put(self, id, name, next_schedule, payload):
         self.check_database_initialized()
+
+        # TODO: need to configure this table name
         table_name = PGScheduleQueue.SCHEDULE_TABLE
+
         payload_str = json.dumps(payload) if type(payload) == dict else payload
 
         sql_put = f"""
@@ -91,15 +95,172 @@ class PGScheduleQueue(ScheduleQueue):
             )
         self.dbconn.commit()
 
+    def delete_with_id(self, id):
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        sql_delete = f"""
+        DELETE FROM {table_name} WHERE id = %s RETRUNING id, payload
+        
+        """
+
+        with self.dbconn.cursor() as cursor:
+            cursor.execute(sql_delete, (id))
+            fetch_results = cursor.fetchall()
+
+        self.dbconn.commit()
+
+        assert len(fetch_results) <= 1
+
+        # TODO: convert payload to dict like 'json.loads(existed_schedule.decode("utf-8"))'
+
+        return fetch_results[0] if len(fetch_results) == 1 else (None, None)
+
+    def delete_with_client(
+        self,
+        client_operation: str,
+        client_application: str,
+        client_group: str,
+        client_key: str,
+        client_type: str,
+    ):
+        self.check_database_initialized()
+
+        results = self.get_with_client(
+            client_application,
+            client_application,
+            client_group,
+            client_key,
+            client_type,
+        )
+
+        for result in results:
+            self.delete_with_id(result[0])
+
+        return results
+
+    def get_with_id(self, id):
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        sql_get = f"""
+        SELECT id, name, next_schedule, payload from {table_name} WHERE id = %s
+        
+        """
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_get, (id,))
+                fetch_results = cursor.fetchall()
+
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            fetch_results = None
+
+        assert len(fetch_results) <= 1
+
+        # TODO: convert payload to dict like 'json.loads(existed_schedule.decode("utf-8"))'
+
+        return fetch_results[0] if len(fetch_results) == 1 else (None, None, None, None)
+
+    def get_with_name(self, name):
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        sql_get = f"""
+        SELECT id, name, next_schedule, payload from {table_name} WHERE name = %s
+        
+        """
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_get, (name,))
+                fetch_results = cursor.fetchall()
+
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            fetch_results = None
+
+        assert len(fetch_results) <= 1
+
+        # TODO: convert payload to dict like 'json.loads(existed_schedule.decode("utf-8"))'
+
+        return fetch_results[0] if len(fetch_results) == 1 else (None, None, None, None)
+
+    def get_with_client(
+        self,
+        client_operation: str,
+        client_application: str,
+        client_group: str,
+        client_key: str,
+        client_type: str,
+    ):
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        sql_get = f"""
+        SELECT id, name, payload from {table_name};
+        
+        """
+
+        result_list = list()
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_get)
+                fetch_results = cursor.fetchall()
+
+                for fetch_result in fetch_results:
+                    fetched_name = fetch_result[1]
+                    [
+                        fetched_operation,
+                        fetched_application,
+                        fetched_group,
+                        fetched_key,
+                        fetched__type,
+                    ] = fetched_name.split(",")
+
+                result_list = [
+                    fetch_result
+                    for fetch_result in fetch_results
+                    if (not client_operation or fetched_operation == client_operation)
+                    and (
+                        not client_application
+                        or fetched_application == client_application
+                    )
+                    and (not client_group or fetched_group == client_group)
+                    and (not client_key or fetched_key == client_key)
+                    and (not client_type or fetched__type == client_type)
+                ]
+
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            result_list = None
+
+        return result_list
+
     def pop(self):
         self.check_database_initialized()
+
+        # TODO: need to configure this table name
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
         sql_pop = f"""
         UPDATE {table_name} as sq SET processing_started_at = '{str(datetime.utcnow())}'
         WHERE sq.id = (
             SELECT sqInner.id FROM {table_name} sqInner
-            WHERE sqInner.processing_started_at IS NULL
+            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
             ORDER By sqInner.next_schedule ASC
             LIMIT 1
             FOR UPDATE
@@ -107,9 +268,14 @@ class PGScheduleQueue(ScheduleQueue):
         RETURNING sq.id, sq.name, sq.next_schedule, sq.payload
         """
 
-        with self.dbconn.cursor() as cursor:
-            cursor.execute(sql_pop)
-            pop_result = cursor.fetchall()
-            print(pop_result)
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_pop)
+                pop_results = cursor.fetchall()
 
-        self.dbconn.commit()
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            pop_results = None
+
+        return pop_results

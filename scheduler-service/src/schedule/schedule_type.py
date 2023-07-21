@@ -3,8 +3,6 @@ from datetime import datetime
 
 # from croniter import croniter
 import pytz
-
-from schedule.schedule_util import calculate_cron_unit
 from schedule.schedule_cron import CronTime
 
 import sys
@@ -74,21 +72,6 @@ class ScheduleType:
             next_datetime = cron_time.get_next(base, "Asia/Seoul")
             next_time = next_datetime.timestamp()
             delay = next_time - datetime.timestamp(base)
-
-            # if len(cron_elements) == 5:
-            #     utc_cron = Converter(schedule_event["schedule"], tz).to_utc_cron()
-            #     iter = croniter(utc_cron, base)
-            #     next_time = datetime.timestamp(iter.get_next(datetime))
-            #     delay = next_time - datetime.timestamp(base)
-            # elif len(cron_elements) == 6:
-            #     schedule_data = " ".join(cron_elements[1:])
-            #     utc_cron = Converter(schedule_data, tz).to_utc_cron()
-            #     iter = croniter(utc_cron, base)
-            #     next_time = datetime.timestamp(iter.get_next(datetime))
-            #     secs = calculate_cron_unit(cron_elements[0])
-            #     delay = next_time - datetime.timestamp(base) + secs
-            # else:
-            #     raise Exception(f'wrong format error: {schedule_event["schedule"]}')
         elif (
             schedule_event["type"] == ScheduleType.DELAY_RECUR
             or schedule_event["type"] == ScheduleType.DELAY

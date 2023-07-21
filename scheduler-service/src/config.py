@@ -28,9 +28,9 @@ class Config:
         return cls.CONFIG_DATA.get(key, None)
 
     @classmethod
-    def history(cls):
+    def database(cls):
         try:
-            config_data = cls.CONFIG_DATA.get("history", None)
+            config_data = cls.CONFIG_DATA.get("database", None)
             if not config_data:
                 return None
             assert (
@@ -41,30 +41,36 @@ class Config:
                 and config_data["db"]
             )
         except Exception as ex:
-            print(f"invalid configuration(db): \n{ex}")
+            print(f"invalid configuration(pg): \n{ex}")
             config_data = None
 
-        return (
-            (
-                config_data["host"],
-                config_data["port"],
-                config_data["id"],
-                config_data["pw"],
-                config_data["db"],
-            )
-            if config_data != None
-            else None
-        )
+        return config_data
 
     @classmethod
-    def queue_info(cls):
+    def history_table(cls):
         try:
-            queue_type = cls.CONFIG_DATA.get("queue", "local")
-            info = cls.CONFIG_DATA.get(queue_type, {})
+            assert cls.CONFIG_DATA.get("history")
+            history_table = cls.CONFIG_DATA.get("history").get(
+                "table", "schedule_history"
+            )
         except Exception as ex:
-            print(f"invalid configuration(evt_queue): \n{ex}")
-            info = {}
-        return (queue_type, info)
+            print(f"invalid configuration(history): \n{ex}")
+            print("using default table name(schedule_history)")
+            history_table = "schedule_history"
+        return history_table
+
+    @classmethod
+    def scheduler_table(cls):
+        try:
+            assert cls.CONFIG_DATA.get("scheduler")
+            scheduler_table = cls.CONFIG_DATA.get("scheduler").get(
+                "table", "schedule_queue"
+            )
+        except Exception as ex:
+            print(f"invalid configuration(history): \n{ex}")
+            print("using default table name(schedule_queue)")
+            scheduler_table = "schedule_queue"
+        return scheduler_table
 
 
 if __name__ == "__main__":

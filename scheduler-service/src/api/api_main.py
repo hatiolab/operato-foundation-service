@@ -3,13 +3,14 @@ from typing import Optional
 
 from api.api_method import (
     api_register,
-    api_delete_schedule,
-    api_get_schedules,
-    api_reset,
+    api_delete_schedule_with_id,
+    api_delete_schedule_with_client,
+    api_get_schedules_with_id,
+    api_get_schedules_with_client,
 )
 
 from api.api_data_type import Schedule, ScheduleResult, ScheduleResultCount
-from schedule.schedule_event_handler import ScheduleEventHandler
+from schedule.scheduler import Scheduler
 
 
 fast_api = FastAPI(
@@ -25,13 +26,13 @@ fast_api = FastAPI(
 
 @fast_api.on_event("startup")
 async def startup_event():
-    schedule_handler = ScheduleEventHandler()
+    schedule_handler = Scheduler()
     schedule_handler.initialize()
 
 
 @fast_api.on_event("shutdown")
 async def shutdown_event():
-    pass
+    Scheduler.finalize()
 
 
 @fast_api.post("/schedules")
@@ -55,7 +56,7 @@ async def delete_schedule(id: str) -> ScheduleResultCount:
     """
     unregister a schedule event
     """
-    return api_delete_schedule(id)
+    return api_delete_schedule_with_id(id)
 
 
 @fast_api.delete("/schedules")
@@ -69,7 +70,7 @@ async def delete_schedule(
     """
     unregister a schedule event
     """
-    return api_delete_schedule(None, operation, application, group, key, type)
+    return api_delete_schedule_with_client(operation, application, group, key, type)
 
 
 @fast_api.get("/schedules")
@@ -83,7 +84,7 @@ async def get_schedules(
     """
     list all registered events
     """
-    return api_get_schedules(None, operation, application, group, key, type)
+    return api_get_schedules_with_client(operation, application, group, key, type)
 
 
 @fast_api.get("/schedules/{id}")
@@ -91,7 +92,7 @@ async def get_schedules_with_resp_id(id: str) -> list:
     """
     list all registered events
     """
-    return api_get_schedules(id)
+    return api_get_schedules_with_id(id)
 
 
 # @fast_api.post("/admin/reset")
