@@ -121,26 +121,32 @@ class Scheduler:
 
             # 1. check if unique key(operation) is duplicated.
             (id, _, _, _) = self.schedule_queue.get_with_name(schedule_unique_name)
-            schedule_id = id if id else str(uuid.uuid4())
+            # 1.1 if duplicated, delete the previous one and register new one with the same id
+            if id:
+                self.schedule_queue.delete_with_id(id)
+                schedule_id = id
 
-            # 2. get the next timestamp and the delay based on schedule format
+            # 1.2 if not duplicated, create a new id
+            else:
+                schedule_id = str(uuid.uuid4())
+
+            # 2. calculate next timestamp and delay based on schedule_event
             tz = schedule_event.get("timezone", "Asia/Seoul")
             (next_time, _) = ScheduleType.get_next_and_delay(schedule_event, tz)
 
-            # TODO: add some additional key-values (status, ...)
+            # 3. arrnage the task parameters of this schedule
             new_schedule_task = schedule_event["task"]
-            # 4.1 check if task type is available
+            # 3.1 check if task type is available
             if not new_schedule_task["type"] in TaskManager.all():
                 raise Exception("task type unavailable.")
-            # 4.2 check if task connection is available
+            # 3.2 check if task connection is available
             input_task_connection = new_schedule_task["connection"]
             self.is_task_available(new_schedule_task["type"], input_task_connection)
-            # 4.3 update some additional data like next and retry
+            # 3.3 update some additional parameters of this task like status, next, etc.
             new_schedule_task["retry_count"] = 0
             new_schedule_task["next"] = next_time
             new_schedule_task["status"] = ScheduleTaskStatus.IDLE
             new_schedule_task["iteration"] = 0
-            new_schedule_task["lastRun"] = None
 
             # 5. store the updated schedule event
             self.schedule_queue.put(
@@ -211,10 +217,10 @@ class Scheduler:
     ):
         try:
             if (
-                (type(operation) is not str or operation == "")
-                and (type(application) is not str or application == "")
-                and (type(group) is not str or group == "")
-                and (type(key) is not str or key == "")
+                (type(client_operation) is not str or client_operation == "")
+                and (type(client_application) is not str or client_application == "")
+                and (type(client_group) is not str or client_group == "")
+                and (type(client_key) is not str or client_key == "")
                 and (type(client_type) is not str or client_type == "")
             ):
                 raise HTTPException(
@@ -246,6 +252,9 @@ class Scheduler:
         try:
             found_schedule = self.schedule_queue.get_with_id(schedule_id)
 
+            if len(found_schedule) == 0:
+                raise HTTPException(status_code=404, detail="Item not found")
+
         except Exception as ex:
             print(f"Exception: {ex}")
             raise ex
@@ -260,10 +269,10 @@ class Scheduler:
         client_key: str,
         client_type: str,
     ):
-        result_list = list()
+        found_schedules = list()
 
         try:
-            result_list = self.schedule_queue.get_with_client(
+            found_schedules = self.schedule_queue.get_with_client(
                 client_operation,
                 client_application,
                 client_group,
@@ -271,11 +280,14 @@ class Scheduler:
                 client_type,
             )
 
+            if len(found_schedules) == 0:
+                raise HTTPException(status_code=404, detail="Item not found")
+
         except Exception as ex:
             print(f"Exception: {ex}")
             raise ex
 
-        return result_list
+        return found_schedules
 
     def get_groups(self):
         group_list = list()
@@ -451,9 +463,6 @@ class Scheduler:
             res = await task.run(**schedule_event)
             log_debug(f"handle_event done: {key}, res: {str(res)}")
 
-            # 4. set the lastRun
-            task_info["lastRun"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
             # 5. update the status of this task
             history_db_status = ""
             if res:
@@ -522,10 +531,6 @@ class Scheduler:
                         print(f"task run: {task_info}")
                         res = await task.run(**schedule_event)
                         log_debug(f"handle_event done: {key}, res: {str(res)}")
-                        # 4. set the lastRun
-                        task_info["lastRun"] = datetime.now().strftime(
-                            "%Y-%m-%dT%H:%M:%S"
-                        )
 
                         # 5. update the status of this task
                         history_db_status = ""

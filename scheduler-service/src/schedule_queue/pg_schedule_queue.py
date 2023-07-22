@@ -88,15 +88,16 @@ class PGScheduleQueue(ScheduleQueue):
         payload_str = json.dumps(payload) if type(payload) == dict else payload
 
         sql_put = f"""
-        INSERT INTO {table_name} (id, name, next_schedule, created_at, payload)
-            VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO {table_name} (id, name, next_schedule, created_at, processing_started_at, payload)
+            VALUES (%s, %s, %s, %s, NULL, %s)
             ON CONFLICT (name)
             DO UPDATE SET (next_schedule, payload) = (EXCLUDED.next_schedule, EXCLUDED.payload);
         """
 
         with self.dbconn.cursor() as cursor:
             cursor.execute(
-                sql_put, (id, name, next_schedule, str(datetime.utcnow()), payload_str)
+                sql_put,
+                (id, name, next_schedule, str(datetime.utcnow()), payload_str),
             )
         self.dbconn.commit()
 
@@ -139,7 +140,7 @@ class PGScheduleQueue(ScheduleQueue):
         self.check_database_initialized()
 
         results = self.get_with_client(
-            client_application,
+            client_operation,
             client_application,
             client_group,
             client_key,
@@ -194,8 +195,6 @@ class PGScheduleQueue(ScheduleQueue):
             with self.dbconn.cursor() as cursor:
                 cursor.execute(sql_get, (name,))
                 fetch_results = cursor.fetchall()
-
-            self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
             fetch_results = None
@@ -234,11 +233,11 @@ class PGScheduleQueue(ScheduleQueue):
                 for fetch_result in fetch_results:
                     fetched_name = fetch_result[1]
                     [
-                        fetched_operation,
                         fetched_application,
                         fetched_group,
-                        fetched_key,
                         fetched__type,
+                        fetched_key,
+                        fetched_operation,
                     ] = fetched_name.split(",")
 
                 results = [
@@ -253,8 +252,6 @@ class PGScheduleQueue(ScheduleQueue):
                     and (not client_key or fetched_key == client_key)
                     and (not client_type or fetched__type == client_type)
                 ]
-
-            self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
             results = None
@@ -273,7 +270,7 @@ class PGScheduleQueue(ScheduleQueue):
         UPDATE {table_name} as sq SET processing_started_at = '{str(datetime.utcnow())}'
         WHERE sq.id = (
             SELECT sqInner.id FROM {table_name} sqInner
-            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule < {int(time.time())}
+            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
             ORDER By sqInner.next_schedule ASC
             LIMIT 1
             FOR UPDATE
