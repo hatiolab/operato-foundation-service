@@ -6,7 +6,7 @@ from fastapi import HTTPException
 import threading
 from datetime import datetime
 
-from api.api_data_type import Schedule
+from restful.rest_type import Schedule
 from config import Config
 from schedule_queue.pg_schedule_queue import PGScheduleQueue
 from schedule.schedule_type import ScheduleType, ScheduleTaskStatus
@@ -50,20 +50,23 @@ class Scheduler:
                 raise ex
 
     @classmethod
-    def process_schedule(cls):
-        print(f"called process_schedule: {str(datetime.now())}")
+    def do_periodic_process(cls, loop):
+        print(f"called do_periodic_process: {str(datetime.now())}")
 
         # 1. pop the schedule with the lowest next_schedule value
         scheduler = cls()
-        schedule = scheduler.schedule_queue.pop()
-        print(f"schedule: {schedule}")
+        schedules = scheduler.schedule_queue.pop()
+        print(f"schedules: {schedules}")
+
+        if len(schedules) > 0:
+            scheduler.run_process_schedules(schedules, loop)
 
         # TODO: 0.5(500ms) is a part of this application configuration.
         if not scheduler.finalized:
-            threading.Timer(0.5, Scheduler.process_schedule).start()
+            threading.Timer(0.5, Scheduler.do_periodic_process, args=(loop,)).start()
 
     def start_schedule(self):
-        Scheduler.process_schedule()
+        Scheduler.do_periodic_process(asyncio.get_event_loop())
 
     def stop_schedule(self):
         self.finalized = True
@@ -170,9 +173,6 @@ class Scheduler:
             print(f"Exception: {ex}")
             raise ex
 
-    ##########################################################################################
-    # TODO: 기존에는 별도의 id를 생성했으나, resp_id를 등록 시에 생성되는 레코드 id로 사용하도록 변경
-    ##########################################################################################
     def unregister(self, schedule_id: str):
         try:
             if type(schedule_id) is not str or schedule_id == "":
@@ -303,75 +303,70 @@ class Scheduler:
 
         return group_list
 
-    def retry_non_recur_event(self, schedule_event):
-        task_info = schedule_event["task"]
-        client_info = schedule_event["client"]
-        schedule_unique_name = self.create_client_unique_name(client_info)
+    def retry_non_recur_event(self, schedule_id, schedule_name, schedule):
+        task_info = schedule["task"]
         base = datetime.now(timezone.utc)
 
+        # 1. check if the current retry count is over the max retry count
         retry_count = task_info.get("retry_count", 0)
         max_retry_count = task_info.get("max_retry_count", -1)
         if (max_retry_count != -1) and (retry_count >= max_retry_count):
             log_info(
                 f"Retry count({retry_count}) is over max_retry_count({max_retry_count})."
             )
-            self.schedule_db.pop(schedule_unique_name)
             return
 
-        retry_wait = schedule_event.get("retry_wait", 60)
-        schedule_event["next"] = datetime.timestamp(base) + retry_wait
+        # 2. calculate the next timestamp and delay based on schedule
+        retry_wait = schedule.get("retry_wait", 60)
+        schedule["next"] = datetime.timestamp(base) + retry_wait
 
-        # set the evetn to the localqueue
-        self.schedule_db.put(schedule_unique_name, schedule_event)
+        # 3. put this schedule to queue
+        self.schedule_queue.put(schedule_id, schedule_name, schedule["next"], schedule)
 
-        # run event handler
-        self.run_event_handler(schedule_unique_name, retry_wait, schedule_event)
-        # handle_event_future = asyncio.run_coroutine_threadsafe(
-        #     self.handle_delay(retry_wait),
-        #     asyncio.get_event_loop(),
-        # )
-        # self.running_schedules[schedule_unique_name] = handle_event_future
-
-    def register_next(self, schedule_event):
+    def postprocess_schedule(
+        self,
+        process_result: bool,
+        schedule_id: str,
+        schedule_name: str,
+        schedule: dict,
+    ):
         try:
-            client_info = schedule_event["client"]
-            tz = schedule_event.get("timezone", "Asia/Seoul")
-            schedule_unique_name = self.create_client_unique_name(client_info)
+            # 1. update the status of the task in this schedule
+            if process_result:
+                # 1.1 if the result of task run is successful, update the status of this task
+                task_info["status"] = ScheduleTaskStatus.DONE
+                task_info["iteration"] += 1
+                task_info["retry_count"] = 0
+            else:
+                # 1.1 if the result of task run is successful, update the status of this task
+                task_info["status"] = ScheduleTaskStatus.FAILED
+                task_info["retry_count"] += 1
 
-            # 1. check if scheluer event type is recurrring..
-            if ScheduleType.is_recurring(schedule_event["type"]):
-                # 1.1. calculate the next timestamp and delay based on schedule_event
-                (next_time, delay) = ScheduleType.get_next_and_delay(schedule_event, tz)
+            # 2. get the schedule timezone
+            tz = schedule.get("timezone", "Asia/Seoul")
 
-                new_schedule_task = schedule_event["task"]
-
-                # 1.2. set the next timestamp
+            # 3. check if schedule event type is recurring
+            if ScheduleType.is_recurring(schedule["type"]):
+                # 3.1. calculate the next timestamp and delay based on schedule
+                (next_time, delay) = ScheduleType.get_next_and_delay(schedule, tz)
+                new_schedule_task = schedule["task"]
                 new_schedule_task["next"] = next_time
 
+                # 3.2 update the status of this schedule task
                 new_schedule_task["status"] = ScheduleTaskStatus.IDLE
 
-                # 1.3. set the evetn to the localqueue
-                self.schedule_db.put(schedule_unique_name, schedule_event)
-
-                # 1.4. run handle_event
-                self.run_event_handler(schedule_unique_name, delay, schedule_event)
-                # handle_event_future = asyncio.run_coroutine_threadsafe(
-                #     self.handle_delay(delay),
-                #     asyncio.get_event_loop(),
-                # )
-                # self.running_schedules[schedule_unique_name] = handle_event_future
-            # 2. check if scheluer event type is non-recurring
+                # 3.3. set the evetn to the localqueue
+                self.schedule_queue.put(schedule_id, schedule_name, next_time, schedule)
+            # 4. check if scheluer event type is non-recurring
             else:
-                task_info = schedule_event.get("task")
-                # 2.1 check if the result of the previos task run is successful
+                # 4.1 check if the result of the previous task run is successful
+                task_info = schedule.get("task")
                 if task_info.get("status") == ScheduleTaskStatus.DONE:
-                    # 2.1.1 pop this schedule event if it is not ono of recurrring schedule types.
-                    self.schedule_db.pop(schedule_unique_name)
-                    self.running_schedules.pop(schedule_unique_name, None)
-                # 2.2 in case of failed...
+                    pass
+                # 4.2 in case of failed...
                 else:
-                    # 2.2.1 run this task again though the type is non-recurring
-                    self.retry_non_recur_event(schedule_event)
+                    # 4.2.1 run this task again though the type is non-recurring
+                    self.retry_non_recur_event(schedule_id, schedule_name, schedule)
 
         except Exception as ex:
             raise ex
@@ -404,88 +399,6 @@ class Scheduler:
         except Exception as ex:
             log_error(f"can't save event to db - {ex}")
 
-    def reset(self, admin_info: dict) -> dict:
-        try:
-            reset_result = dict()
-
-            # TODO: should modify this authentication process by extenral modules like credentials,
-            if (
-                admin_info["user"] != "admin"
-                and admin_info["password"] != "1qazxsw23edc"
-            ):
-                raise HTTPException(status_code=401, detail="Unauthorized")
-
-            # reset the schedule queue
-            count = 0
-            key_value_list = self.schedule_db.get_key_value_list(False)
-            for key, value in key_value_list:
-                self.put_event_to_history_db("deleted", value)
-                self.schedule_db.pop(key, False)
-                future_event = self.running_schedules.pop(key, None)
-                future_event.cancel() if future_event else None
-                count += 1
-            reset_result["schevt"] = count
-
-            # reset the dead letter queue(dlq)
-            key_list = self.schedule_db.get_key_list(True)
-            count = 0
-            for key in key_list:
-                self.schedule_db.pop(key, True)
-                count += 1
-            reset_result["dlq"] = count
-        except Exception as ex:
-            raise ex
-
-        return reset_result
-
-    async def handle_event(self, key, schedule_event, delay):
-        try:
-            log_info(f'handle_event start: {schedule_event["name"]}')
-
-            # 1. put it into the qeueue with the status 'waiting'
-            task_info = schedule_event["task"]
-            task_info["status"] = ScheduleTaskStatus.WAITING
-            self.schedule_db.put(key, schedule_event)
-
-            # 2. sleep with the input delay
-            log_info(
-                f'***{key} about to apply the delay({delay}, {datetime.fromtimestamp(task_info["next"])})'
-            )
-            await asyncio.sleep(delay)
-
-            log_info(f'*** start this task({task_info["type"]}, {key})')
-
-            # 3. run a task based on task parameters
-            task_cls = TaskManager.get(task_info["type"])
-            task = task_cls()
-
-            task.connect(**task_info)
-            res = await task.run(**schedule_event)
-            log_debug(f"handle_event done: {key}, res: {str(res)}")
-
-            # 5. update the status of this task
-            history_db_status = ""
-            if res:
-                # 5.1 put it into the queue with status 'Done'
-                task_info["status"] = ScheduleTaskStatus.DONE
-                task_info["iteration"] += 1
-                task_info["retry_count"] = 0
-                self.schedule_db.put(key, schedule_event)
-                history_db_status = "done"
-            else:
-                # 5.2 put it into the queue with status 'Failed'
-                task_info["status"] = ScheduleTaskStatus.FAILED
-                task_info["retry_count"] += 1
-                self.schedule_db.put(key, schedule_event)
-                history_db_status = "retry"
-            self.put_event_to_history_db(history_db_status, schedule_event)
-
-            # 6. put the next schedule
-            self.register_next(schedule_event)
-
-        except Exception as ex:
-            log_error(f"Exception: {ex}")
-
     def run_event_handler(
         self, schedule_unique_name, delay, schedule_event=None
     ) -> None:
@@ -499,6 +412,46 @@ class Scheduler:
         # to check the duplicated schedule name later
         self.running_schedules[schedule_unique_name] = handle_event_future
         return handle_event_future
+
+    def run_process_schedules(self, schedules: list, loop):
+        # start a schedule event task
+        handle_event_future = asyncio.run_coroutine_threadsafe(
+            self.process_schedules(schedules),
+            loop,
+        )
+
+        # add the name of the current schedlue event to event_name list.
+        # to check the duplicated schedule name later
+        self.running_schedules[id] = handle_event_future
+        return handle_event_future
+
+    async def process_schedules(self, schedules: list):
+        try:
+            for schedule in schedules:
+                id = schedule["id"]
+                name = schedule["name"]
+                task_info = schedule["task"]
+
+                try:
+                    # set the status of this task to 'processing'
+                    task_info["status"] = ScheduleTaskStatus.PROCESSING
+
+                    # 3. run a task based on task parameters
+                    task_cls = TaskManager.get(task_info["type"])
+                    task = task_cls()
+
+                    task.connect(**task_info)
+                    print(f"task run: {task_info}")
+                    res = await task.run(**schedule)
+                    log_debug(f"handle_event done: {name}, res: {str(res)}")
+
+                    # 4. put the next schedule
+                    self.postprocess_schedule(res, id, name, schedule)
+                except Exception as ex:
+                    log_error(f"Exception: {ex}")
+
+        except Exception as ex:
+            pass
 
     async def handle_delay(self, delay):
         try:
@@ -551,7 +504,7 @@ class Scheduler:
                         self.put_event_to_history_db(history_db_status, schedule_event)
 
                         # 6. put the next schedule
-                        self.register_next(schedule_event)
+                        self.postprocess_schedule(schedule_event)
                     except Exception as ex:
                         log_error(f"Exception: {ex}")
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from typing import Optional
 
-from api.api_method import (
+from restful.rest_method import (
     api_register,
     api_delete_schedule_with_id,
     api_delete_schedule_with_client,
@@ -9,7 +9,7 @@ from api.api_method import (
     api_get_schedules_with_client,
 )
 
-from api.api_data_type import Schedule, ScheduleResult, ScheduleResultCount
+from restful.rest_type import Schedule, ScheduleResult, ScheduleResultCount
 from schedule.scheduler import Scheduler
 
 
@@ -93,11 +93,3 @@ async def get_schedules_with_resp_id(id: str) -> list:
     list all registered events
     """
     return api_get_schedules_with_id(id)
-
-
-# @fast_api.post("/admin/reset")
-# async def reset(admin_info: ScheduleAdmin) -> dict:
-#     """
-#     reset all queues
-#     """
-#     return api_reset(admin_info.dict())

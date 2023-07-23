@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     # run fastapi server using uvicorn
     uvicorn.run(
-        "api.api_main:fast_api",
+        "restful.rest_main:fast_api",
         host="0.0.0.0",
         port=port,
         log_level="info",

@@ -1,6 +1,6 @@
 import traceback
 
-from api.api_data_type import Schedule
+from restful.rest_type import Schedule
 from schedule.scheduler import Scheduler
 
 import sys
@@ -84,9 +84,3 @@ def api_get_groups() -> list:
     log_info(f"request api_get_groups")
     schedule_handler = Scheduler()
     return schedule_handler.get_groups()
-
-
-def api_reset(admin_info) -> dict:
-    log_info(f"request reset")
-    schedule_handler = Scheduler()
-    return schedule_handler.reset(admin_info)
