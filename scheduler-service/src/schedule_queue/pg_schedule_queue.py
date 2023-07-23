@@ -32,7 +32,7 @@ class PGScheduleQueue(ScheduleQueue):
             """
             CREATE TABLE schedule_queue (  
                 id UUID NOT NULL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL UNIQUE,
+                name VARCHAR(255) NOT NULL,
                 next_schedule bigint,
                 created_at TIMESTAMP NOT NULL,
                 processing_started_at TIMESTAMP,
@@ -81,6 +81,10 @@ class PGScheduleQueue(ScheduleQueue):
 
     def put(self, id, name, next_schedule, payload):
         self.check_database_initialized()
+
+        # delete the existed schedule with the same id
+        (dup_id, _, _, _) = self.get_with_name(name, True)
+        dup_id and self.delete_with_id(dup_id)
 
         # TODO: need to configure this table name
         table_name = PGScheduleQueue.SCHEDULE_TABLE
@@ -159,7 +163,7 @@ class PGScheduleQueue(ScheduleQueue):
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
         sql_get = f"""
-        SELECT id, name, next_schedule, payload from {table_name} WHERE id = %s
+        SELECT id, name, next_schedule, payload from {table_name} WHERE id = %s AND processing_started_at IS NULL
         
         """
 
@@ -180,16 +184,23 @@ class PGScheduleQueue(ScheduleQueue):
             for fetch_result in fetch_results
         ]
 
-    def get_with_name(self, name):
+    def get_with_name(self, name: str, with_already_processed: bool = False):
         self.check_database_initialized()
 
         # TODO: need to configure this table name
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
-        sql_get = f"""
+        sql_get = (
+            f"""
+        SELECT id, name, next_schedule, payload from {table_name} WHERE name = %s AND processing_started_at IS NULL
+        
+        """
+            if not with_already_processed
+            else f"""
         SELECT id, name, next_schedule, payload from {table_name} WHERE name = %s
         
         """
+        )
 
         try:
             with self.dbconn.cursor() as cursor:
@@ -219,7 +230,7 @@ class PGScheduleQueue(ScheduleQueue):
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
         sql_get = f"""
-        SELECT id, name, payload from {table_name};
+        SELECT id, name, payload from {table_name} WHERE processing_started_at IS NULL
         
         """
 
@@ -286,7 +297,7 @@ class PGScheduleQueue(ScheduleQueue):
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
-            pop_results = None
+            pop_results = []
 
         return [
             self._generate_schedule_dict(pop_result[0], pop_result[3])

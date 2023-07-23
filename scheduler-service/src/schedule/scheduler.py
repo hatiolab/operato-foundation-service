@@ -123,7 +123,9 @@ class Scheduler:
             schedule_unique_name = self.create_client_unique_name(client_info)
 
             # 1. check if unique key(operation) is duplicated.
-            (id, _, _, _) = self.schedule_queue.get_with_name(schedule_unique_name)
+            (id, _, _, _) = self.schedule_queue.get_with_name(
+                schedule_unique_name, True
+            )
             # 1.1 if duplicated, delete the previous one and register new one with the same id
             if id:
                 self.schedule_queue.delete_with_id(id)
@@ -331,6 +333,7 @@ class Scheduler:
         schedule: dict,
     ):
         try:
+            task_info = schedule["task"]
             # 1. update the status of the task in this schedule
             if process_result:
                 # 1.1 if the result of task run is successful, update the status of this task
@@ -452,8 +455,11 @@ class Scheduler:
                     res = await task.run(**schedule)
                     log_debug(f"handle_event done: {name}, res: {str(res)}")
 
+                    client_info = schedule["client"]
+                    schedule_name = self.create_client_unique_name(client_info)
+
                     # 4. put the next schedule
-                    self.postprocess_schedule(res, id, name, schedule)
+                    self.postprocess_schedule(res, id, schedule_name, schedule)
                 except Exception as ex:
                     log_error(f"Exception: {ex}")
 
