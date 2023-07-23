@@ -155,7 +155,7 @@ class Scheduler:
             self.schedule_queue.put(
                 schedule_id, schedule_unique_name, next_time, schedule_event
             )
-            self.put_event_to_history_db("register", schedule_event)
+            # self.put_event_to_history_db("register", schedule_event)
 
             # 7. return the result with the response id
             return {
@@ -179,8 +179,8 @@ class Scheduler:
                 raise Exception(f"schedule_id is not available.. {schedule_id}")
 
             (_, schedule) = self.schedule_queue.delete_with_id(schedule_id)
-            if schedule:
-                self.put_event_to_history_db("unregister", schedule)
+            # if schedule:
+            #     self.put_event_to_history_db("unregister", schedule)
 
         except Exception as ex:
             raise ex
@@ -303,7 +303,7 @@ class Scheduler:
 
         return group_list
 
-    def retry_non_recur_event(self, schedule_id, schedule_name, schedule):
+    def process_retry_non_recur_event(self, schedule_id, schedule_name, schedule):
         task_info = schedule["task"]
         base = datetime.now(timezone.utc)
 
@@ -345,6 +345,19 @@ class Scheduler:
             # 2. get the schedule timezone
             tz = schedule.get("timezone", "Asia/Seoul")
 
+            """
+            기본적으로 일정한 주기를 가지는 스케줄이 태스크 동작을 실패할 경우,
+            동일한 태스크가 다음 주기에 수행되도록 스케줄링된다.
+            해당 태스크는 최대 재시도 횟수(max_retry_count) 만큼 수행되고 실패할 경우, 
+            더 이상 스케줄링에 포함되지 않는다.
+
+            주기를 별도로 가지고 있지 않는 1회성 스케줄의 경우,
+            기본 설정된 최대 재시도 횟수(max_retry_count) 외에 재시작 대기 시간(retry_wait)을 가지고 있어,
+            실패한 시점부터 재시작 대기 시간(retry_wait) 이후에 다시 수행된다.
+            최대 재시도 횟수(max_retry_count) 만큼 수행되고 실패할 경우, 
+            더 이상 스케줄링에 포함되지 않는다.
+
+            """
             # 3. check if schedule event type is recurring
             if ScheduleType.is_recurring(schedule["type"]):
                 # 3.1. calculate the next timestamp and delay based on schedule
@@ -366,12 +379,20 @@ class Scheduler:
                 # 4.2 in case of failed...
                 else:
                     # 4.2.1 run this task again though the type is non-recurring
-                    self.retry_non_recur_event(schedule_id, schedule_name, schedule)
+                    self.process_retry_non_recur_event(
+                        schedule_id, schedule_name, schedule
+                    )
 
         except Exception as ex:
             raise ex
 
     def put_event_to_history_db(self, event: str, schedule_event: dict):
+        """
+        변경된 스케줄큐 구조에서 이력을 별도의 테이블로 관리하는 것에 대한 고려가 필요함.
+        별도의 테이블 없이 스케줄큐 테이블을 통해서 별도의 스케줄 처리에 대한 이력(스케줄 시작 여부, 상태 등)을
+        관리할 수 있다면, 구조를 단순화하는 차원에서 하나의 테이블로 관리하는 것이 좋을 것 같음.
+
+        """
         try:
             task_info = schedule_event.get("task", {})
             client_info = schedule_event.get("client", {})
@@ -398,20 +419,6 @@ class Scheduler:
                         db_session.commit()
         except Exception as ex:
             log_error(f"can't save event to db - {ex}")
-
-    def run_event_handler(
-        self, schedule_unique_name, delay, schedule_event=None
-    ) -> None:
-        # start a schedule event task
-        handle_event_future = asyncio.run_coroutine_threadsafe(
-            self.handle_event(schedule_unique_name, schedule_event, delay),
-            asyncio.get_event_loop(),
-        )
-
-        # add the name of the current schedlue event to event_name list.
-        # to check the duplicated schedule name later
-        self.running_schedules[schedule_unique_name] = handle_event_future
-        return handle_event_future
 
     def run_process_schedules(self, schedules: list, loop):
         # start a schedule event task
@@ -452,61 +459,3 @@ class Scheduler:
 
         except Exception as ex:
             pass
-
-    async def handle_delay(self, delay):
-        try:
-            log_info(f"handle_event start: after {delay}")
-
-            await asyncio.sleep(delay)
-
-            # 1. get the schedule with the timestamp before now
-            now = datetime.now().timestamp()
-            key_value_list = self.schedule_db.get_key_value_list(False)
-            print("**** key_value_list: ", len(key_value_list))
-
-            for key, schedule_event in self.schedule_db.get_key_value_list(False):
-                task_info = schedule_event["task"]
-                print(f"*#* ({key}) entry: ", task_info["status"])
-                if (
-                    task_info["next"] <= now
-                    and task_info["status"] != ScheduleTaskStatus.PROCESSING
-                ):
-                    try:
-                        # ...
-                        task_info["status"] = ScheduleTaskStatus.PROCESSING
-                        self.schedule_db.put(key, schedule_event)
-
-                        # 3. run a task based on task parameters
-                        task_cls = TaskManager.get(task_info["type"])
-                        task = task_cls()
-
-                        task.connect(**task_info)
-                        print(f"task run: {task_info}")
-                        res = await task.run(**schedule_event)
-                        log_debug(f"handle_event done: {key}, res: {str(res)}")
-
-                        # 5. update the status of this task
-                        history_db_status = ""
-                        if res:
-                            # 5.1 put it into the queue with status 'Done'
-                            task_info["status"] = ScheduleTaskStatus.DONE
-                            task_info["iteration"] += 1
-                            task_info["retry_count"] = 0
-                            self.schedule_db.put(key, schedule_event)
-                            history_db_status = "done"
-                        else:
-                            # 5.2 put it into the queue with status 'Failed'
-                            task_info["status"] = ScheduleTaskStatus.FAILED
-                            task_info["retry_count"] += 1
-                            self.schedule_db.put(key, schedule_event)
-                            history_db_status = "retry"
-
-                        self.put_event_to_history_db(history_db_status, schedule_event)
-
-                        # 6. put the next schedule
-                        self.postprocess_schedule(schedule_event)
-                    except Exception as ex:
-                        log_error(f"Exception: {ex}")
-
-        except Exception as ex:
-            log_error(f"Exception: {ex}")

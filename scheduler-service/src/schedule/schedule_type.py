@@ -25,7 +25,6 @@ class ScheduleTaskFailurePolicy(str, Enum):
 
 class ScheduleTaskStatus:
     IDLE = "idle"
-    WAITING = "waiting"
     PROCESSING = "processing"
     RETRY = "retry"
     DONE = "done"
