@@ -3,25 +3,25 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: schevt-mgr
-  name: schevt-mgr
-  namespace: schevt
+    app: scheduler
+  name: scheduler
+  namespace: hfsvc
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: schevt-mgr
+      app: scheduler
   strategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: schevt-mgr
+        app: scheduler
     spec:
       containers:
-        - image: hatiolab/schevt-mgr:0.4.1
+        - image: hatiolab/scheduler:0.1.0
           imagePullPolicy: Always
-          name: schevt-mgr
+          name: scheduler
           ports:
             - containerPort: 9902
           resources:
@@ -37,7 +37,7 @@ spec:
       volumes:
         - name: config-volume
           configMap:
-            name: schevt-mgr-cfgmap
+            name: scheduler-cm
       restartPolicy: Always
       serviceAccountName: ""
 status:

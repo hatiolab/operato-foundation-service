@@ -6,4 +6,4 @@ COPY src .
 
 RUN pip install -r requirements.txt
 CMD ["python", "main.py"]
-# ENTRYPOINT ["gunicorn", "restful.rest_main:fast_api", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:9902"]
+
