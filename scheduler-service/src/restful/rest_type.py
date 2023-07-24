@@ -34,7 +34,7 @@ class ScheduleTask(BaseModel):
     )
     failed_policy: Optional[ScheduleTaskFailurePolicy] = Field(
         default=ScheduleTaskFailurePolicy.IGNORE,
-        title="Task failure policy [ignore | retry | retry_dlq]",
+        title="Task failure policy [ignore | retry]",
     )
     retry_wait: Optional[int] = Field(
         default=60,

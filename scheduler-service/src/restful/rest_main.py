@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from typing import Optional
 
 from restful.rest_method import (
-    api_register,
-    api_delete_schedule_with_id,
-    api_delete_schedule_with_client,
-    api_get_schedules_with_id,
-    api_get_schedules_with_client,
+    restapi_register,
+    restapi_delete_schedule_with_id,
+    restapi_delete_schedule_with_client,
+    restapi_get_schedules_with_id,
+    restapi_get_schedules_with_client,
 )
 
 from restful.rest_type import Schedule, ScheduleResult, ScheduleResultCount
@@ -40,7 +40,7 @@ async def register_schedule(inputs: Schedule) -> ScheduleResult:
     """
     register a schedule event
     """
-    return api_register(inputs)
+    return restapi_register(inputs)
 
 
 @fast_api.post("/schedules/{id}/update")
@@ -48,7 +48,7 @@ async def update_schedule(id: str, inputs: Schedule) -> ScheduleResult:
     """
     register a schedule event
     """
-    return api_register(inputs)
+    return restapi_register(inputs)
 
 
 @fast_api.delete("/schedules/{id}")
@@ -56,7 +56,7 @@ async def delete_schedule(id: str) -> ScheduleResultCount:
     """
     unregister a schedule event
     """
-    return api_delete_schedule_with_id(id)
+    return restapi_delete_schedule_with_id(id)
 
 
 @fast_api.delete("/schedules")
@@ -70,7 +70,7 @@ async def delete_schedule(
     """
     unregister a schedule event
     """
-    return api_delete_schedule_with_client(operation, application, group, key, type)
+    return restapi_delete_schedule_with_client(operation, application, group, key, type)
 
 
 @fast_api.get("/schedules")
@@ -84,7 +84,7 @@ async def get_schedules(
     """
     list all registered events
     """
-    return api_get_schedules_with_client(operation, application, group, key, type)
+    return restapi_get_schedules_with_client(operation, application, group, key, type)
 
 
 @fast_api.get("/schedules/{id}")
@@ -92,4 +92,4 @@ async def get_schedules_with_resp_id(id: str) -> list:
     """
     list all registered events
     """
-    return api_get_schedules_with_id(id)
+    return restapi_get_schedules_with_id(id)

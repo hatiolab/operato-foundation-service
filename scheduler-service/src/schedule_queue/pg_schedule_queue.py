@@ -80,6 +80,11 @@ class PGScheduleQueue(ScheduleQueue):
         return payload_dict
 
     def put(self, id, name, next_schedule, payload):
+        """
+        TODO: id(PK)에 대한 중복 처리에 대한 고민 필요
+
+        """
+
         self.check_database_initialized()
 
         # delete the existed schedule with the same id

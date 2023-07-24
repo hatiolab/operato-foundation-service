@@ -50,7 +50,7 @@ class Scheduler:
                 raise ex
 
     @classmethod
-    def do_periodic_process(cls, loop):
+    def do_periodic_process(cls, async_process_loop):
         print(f"called do_periodic_process: {str(datetime.now())}")
 
         # 1. pop the schedule with the lowest next_schedule value
@@ -59,11 +59,13 @@ class Scheduler:
         print(f"schedules: {schedules}")
 
         if len(schedules) > 0:
-            scheduler.run_process_schedules(schedules, loop)
+            scheduler.run_process_schedules(schedules, async_process_loop)
 
         # TODO: 0.5(500ms) is a part of this application configuration.
         if not scheduler.finalized:
-            threading.Timer(0.5, Scheduler.do_periodic_process, args=(loop,)).start()
+            threading.Timer(
+                0.5, Scheduler.do_periodic_process, args=(async_process_loop,)
+            ).start()
 
     def start_schedule(self):
         Scheduler.do_periodic_process(asyncio.get_event_loop())
@@ -291,20 +293,6 @@ class Scheduler:
 
         return found_schedules
 
-    def get_groups(self):
-        group_list = list()
-        try:
-            key_value_events = self.schedule_db.get_key_value_list(False)
-            for _, value in key_value_events:
-                client_info = value["client"]
-                if not client_info["group"] in group_list:
-                    group_list.append(client_info["group"])
-
-        except Exception as ex:
-            raise ex
-
-        return group_list
-
     def process_retry_non_recur_event(self, schedule_id, schedule_name, schedule):
         task_info = schedule["task"]
         base = datetime.now(timezone.utc)
@@ -325,6 +313,49 @@ class Scheduler:
         # 3. put this schedule to queue
         self.schedule_queue.put(schedule_id, schedule_name, schedule["next"], schedule)
 
+    def run_process_schedules(self, schedules: list, async_process_loop):
+        # start a schedule event task
+        handle_event_future = asyncio.run_coroutine_threadsafe(
+            self.process_schedules(schedules),
+            async_process_loop,
+        )
+
+        # add the name of the current schedlue event to event_name list.
+        # to check the duplicated schedule name later
+        self.running_schedules[id] = handle_event_future
+        return handle_event_future
+
+    async def process_schedules(self, schedules: list):
+        try:
+            for schedule in schedules:
+                id = schedule["id"]
+                name = schedule["name"]
+                task_info = schedule["task"]
+
+                try:
+                    # set the status of this task to 'processing'
+                    task_info["status"] = ScheduleTaskStatus.PROCESSING
+
+                    # 3. run a task based on task parameters
+                    task_cls = TaskManager.get(task_info["type"])
+                    task = task_cls()
+
+                    task.connect(**task_info)
+                    print(f"task run: {task_info}")
+                    res = await task.run(**schedule)
+                    log_debug(f"handle_event done: {name}, res: {str(res)}")
+
+                    client_info = schedule["client"]
+                    schedule_name = self.create_client_unique_name(client_info)
+
+                    # 4. put the next schedule
+                    self.postprocess_schedule(res, id, schedule_name, schedule)
+                except Exception as ex:
+                    log_error(f"Exception: {ex}")
+
+        except Exception as ex:
+            pass
+
     def postprocess_schedule(
         self,
         process_result: bool,
@@ -332,6 +363,11 @@ class Scheduler:
         schedule_name: str,
         schedule: dict,
     ):
+        """
+        스케줄 내에 태스크 정보를 기반으로 태스크가 정상적으로 실행되거나 혹은 종료된 후,
+        스케줄의 상태를 업데이트하고, 다음 스케줄을 스케줄 큐에 등록한다.
+
+        """
         try:
             task_info = schedule["task"]
             # 1. update the status of the task in this schedule
@@ -422,46 +458,3 @@ class Scheduler:
                         db_session.commit()
         except Exception as ex:
             log_error(f"can't save event to db - {ex}")
-
-    def run_process_schedules(self, schedules: list, loop):
-        # start a schedule event task
-        handle_event_future = asyncio.run_coroutine_threadsafe(
-            self.process_schedules(schedules),
-            loop,
-        )
-
-        # add the name of the current schedlue event to event_name list.
-        # to check the duplicated schedule name later
-        self.running_schedules[id] = handle_event_future
-        return handle_event_future
-
-    async def process_schedules(self, schedules: list):
-        try:
-            for schedule in schedules:
-                id = schedule["id"]
-                name = schedule["name"]
-                task_info = schedule["task"]
-
-                try:
-                    # set the status of this task to 'processing'
-                    task_info["status"] = ScheduleTaskStatus.PROCESSING
-
-                    # 3. run a task based on task parameters
-                    task_cls = TaskManager.get(task_info["type"])
-                    task = task_cls()
-
-                    task.connect(**task_info)
-                    print(f"task run: {task_info}")
-                    res = await task.run(**schedule)
-                    log_debug(f"handle_event done: {name}, res: {str(res)}")
-
-                    client_info = schedule["client"]
-                    schedule_name = self.create_client_unique_name(client_info)
-
-                    # 4. put the next schedule
-                    self.postprocess_schedule(res, id, schedule_name, schedule)
-                except Exception as ex:
-                    log_error(f"Exception: {ex}")
-
-        except Exception as ex:
-            pass
