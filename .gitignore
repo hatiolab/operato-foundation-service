@@ -7,9 +7,6 @@ config.yaml
 service_queue
 */src/*_test.py
 !*/src/test/*_test.py
-local-run/pending_queue
-local-run/schbroker_queue
-local-run/scheduler_queue
 scheduler-service/local-test-db/postgres_data
 
 # Byte-compiled / optimized / DLL files
