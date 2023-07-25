@@ -1,0 +1,18 @@
+---
+database:
+  host: 127.0.0.1
+  port: 55432
+  id: postgres
+  pw: abcd1234
+  db: scheduler
+
+scheduler:
+  fetch_interval: 100
+  fetch_count: 10
+  table: schedule_queue
+
+history:
+  enable: false
+  table: schedule_history
+
+

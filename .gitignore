@@ -1,6 +1,6 @@
 .DS_Store
-!*/config/config.yaml
 config.yaml
+!*/config/config.yaml
 */db/*
 !db
 .vscode/*
@@ -10,6 +10,7 @@ service_queue
 local-run/pending_queue
 local-run/schbroker_queue
 local-run/scheduler_queue
+scheduler-service/local-test-db/postgres_data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,4 +1,0 @@
----
-queue: local
-
-local: /app/scheduler_queue

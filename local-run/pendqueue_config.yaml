@@ -1,4 +1,0 @@
----
-queue: local
-
-local: /app/pending_queue

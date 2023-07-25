@@ -1,4 +1,0 @@
----
-queue: local
-
-local: /app/schbroker_queue

@@ -2,8 +2,9 @@ version: "3"
 services:
   postgres:
     image: postgres:13.2
-    container_name: db-local-test
+    container_name: schedule-queue-db
     environment:
+      POSTGRES_DB: scheduler
       POSTGRES_PASSWORD: abcd1234
       POSTGRES_USER: postgres
       PGDATA: /var/lib/postgresql/data/pgdata

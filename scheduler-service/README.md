@@ -4,12 +4,12 @@
 - 사용자가 지정한 스케줄 형태에 따라서 이벤트가 호출되며, 일반적으로 호출된 이벤트는 사용자가 등록 시에 지정한 rest api를 호출 
 - 호출된 이벤트가 실패할 경우 정책에 따라서 일정 시간 이후 재시도 수행
 - 스케줄러 처리의 부하를 분산하기 위해서 새롭게 설계된 구조로서 스케줄러는 데이터베이스 기반의 큐 구조를 사용하여 모든 스케줄 데이터를 관리
-- 스케줄러는 다음과 같이 미리 정의된 주기를 기반으로 스케줄큐의 데이터를 처리하도록 구현.(실제 확인 결과 스케줄 처리를 수행하지 않을 경우 3m CPU를 사용.)
+- 스케줄러는 다음과 같이 미리 정의된 주기를 기반으로 스케줄큐의 데이터를 처리하도록 구현.(실제 확인 결과 스케줄 처리를 수행하지 않을 경우 6m CPU를 사용.)
   ```bash
-  NAME                         CPU(cores)   MEMORY(bytes)   
-  scheduler-5c5fd94b89-jkm2b   3m           90Mi            
-  scheduler-5c5fd94b89-m5f7c   3m           91Mi            
-  scheduler-5c5fd94b89-vn2gr   3m           90Mi  
+  NAME                        CPU(cores)   MEMORY(bytes)   
+  scheduler-b5bc94d64-4xkvp   6m           89Mi            
+  scheduler-b5bc94d64-cwmdw   6m           89Mi            
+  scheduler-b5bc94d64-rmnlg   6m           89Mi 
   ```
 - 스케줄러의 주기적 처리에 대한 Diagram
 ![Periodic Scheduler Diagram](./assets/updated-scheduler-diagram-periodic.png "Periodic Scheduler Diagram")

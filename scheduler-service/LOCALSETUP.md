@@ -19,9 +19,7 @@ pip install -r src/requirements.txt
 
 - start the database docker container
 ```bash
-cd local-test-db
-docker-compouse up -d
-
+./start-localdb.sh
 ```
 
 - connect to the database with the following configuration
@@ -31,12 +29,7 @@ database:
   port: 55432
   id: postgres
   pw: abcd1234
-```
-
-- create database named with 'scheduler'
-```sql
-CREATE DATABASE scheduler;
-
+  db: scheduler
 ```
 
 ## Application Run
@@ -44,7 +37,6 @@ CREATE DATABASE scheduler;
 ```bash
 cd src
 python main.py
-
 ```
 
 ### Prepare ***config.yaml***
@@ -55,7 +47,6 @@ copy ***config/config.yaml*** to ***src/*** after modifying it if necessary.
 
 ```bash
 {URL}:9902/docs
-
 ```
 
 ## Workaround 
