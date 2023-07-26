@@ -19,7 +19,7 @@ spec:
         app: scheduler
     spec:
       containers:
-        - image: hatiolab/scheduler:0.1.0
+        - image: hatiolab/scheduler:latest
           imagePullPolicy: Always
           name: scheduler
           ports:

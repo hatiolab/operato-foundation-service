@@ -1,6 +1,5 @@
 import asyncio
 import uuid
-import json
 from datetime import datetime, timezone
 from fastapi import HTTPException
 import threading
@@ -20,7 +19,7 @@ from history.tables.table_schedule_history import ScheduleEventHistory
 import sys
 from helper.logger import Logger
 
-log_message = Logger.get("schevt", Logger.Level.INFO, sys.stdout)
+log_message = Logger.get("scheduler", Logger.Level.INFO, sys.stdout)
 
 log_debug = log_message.debug
 log_info = log_message.info
@@ -51,12 +50,12 @@ class Scheduler:
 
     @classmethod
     def do_periodic_process(cls, async_process_loop):
-        print(f"called do_periodic_process: {str(datetime.now())}")
+        log_debug(f"called do_periodic_process: {str(datetime.now())}")
 
         # 1. pop the schedule with the lowest next_schedule value
         scheduler = cls()
         schedules = scheduler.schedule_queue.pop()
-        print(f"schedules: {schedules}")
+        log_debug(f"schedules: {schedules}")
 
         if len(schedules) > 0:
             scheduler.run_process_schedules(schedules, async_process_loop)
@@ -75,6 +74,9 @@ class Scheduler:
 
     def initialize(self):
         try:
+            # 1. initialize the schedule queue
+            self.schedule_queue.initialize()
+            # 2. start the periodic process
             self.start_schedule()
             log_info("initialization done..")
         except Exception as ex:
@@ -101,7 +103,7 @@ class Scheduler:
         else:
             pass
 
-    def create_client_unique_name(self, client_info: dict) -> str:
+    def generate_client_unique_name(self, client_info: dict) -> str:
         """
         create a unique key for the client
         -> {applicaiton name},{group name},{client type},{client key},{operation name}
@@ -121,21 +123,7 @@ class Scheduler:
         try:
             schedule_event = schedule.dict()
 
-            client_info = schedule_event.get("client")
-            schedule_unique_name = self.create_client_unique_name(client_info)
-
             # 1. check if unique key(operation) is duplicated.
-            (id, _, _, _) = self.schedule_queue.get_with_name(
-                schedule_unique_name, True
-            )
-            # 1.1 if duplicated, delete the previous one and register new one with the same id
-            if id:
-                self.schedule_queue.delete_with_id(id)
-                schedule_id = id
-
-            # 1.2 if not duplicated, create a new id
-            else:
-                schedule_id = str(uuid.uuid4())
 
             # 2. calculate next timestamp and delay based on schedule_event
             tz = schedule_event.get("timezone", "Asia/Seoul")
@@ -156,9 +144,22 @@ class Scheduler:
             new_schedule_task["iteration"] = 0
 
             # 5. store the updated schedule event
-            self.schedule_queue.put(
-                schedule_id, schedule_unique_name, next_time, schedule_event
+            client_info = schedule_event.get("client")
+            schedule_unique_name = self.generate_client_unique_name(client_info)
+            (id, _, _, _) = self.schedule_queue.get_with_name(
+                schedule_unique_name, True
             )
+            # 5.1 if duplicated, delete the previous one and register new one with the same id
+            if id:
+                schedule_id = id
+                self.schedule_queue.update(id, next_time, schedule_event)
+            # 5.2 if not duplicated, create a new id
+            else:
+                schedule_id = str(uuid.uuid4())
+                self.schedule_queue.put(
+                    schedule_id, schedule_unique_name, next_time, schedule_event
+                )
+
             # self.put_event_to_history_db("register", schedule_event)
 
             # 7. return the result with the response id
@@ -174,7 +175,7 @@ class Scheduler:
                 "id": schedule_id,
             }
         except Exception as ex:
-            print(f"Exception: {ex}")
+            log_error(f"Exception: {ex}")
             raise ex
 
     def unregister(self, schedule_id: str):
@@ -260,7 +261,7 @@ class Scheduler:
                 raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
-            print(f"Exception: {ex}")
+            log_error(f"Exception: {ex}")
             raise ex
 
         return found_schedule
@@ -288,7 +289,7 @@ class Scheduler:
                 raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
-            print(f"Exception: {ex}")
+            log_error(f"Exception: {ex}")
             raise ex
 
         return found_schedules
@@ -311,7 +312,8 @@ class Scheduler:
         schedule["next"] = datetime.timestamp(base) + retry_wait
 
         # 3. put this schedule to queue
-        self.schedule_queue.put(schedule_id, schedule_name, schedule["next"], schedule)
+        # self.schedule_queue.put(schedule_id, schedule_name, schedule["next"], schedule)
+        self.schedule_queue.update(schedule_id, schedule["next"], schedule)
 
     def run_process_schedules(self, schedules: list, async_process_loop):
         # start a schedule event task
@@ -341,12 +343,12 @@ class Scheduler:
                     task = task_cls()
 
                     task.connect(**task_info)
-                    print(f"task run: {task_info}")
+                    log_debug(f"task run: {task_info}")
                     res = await task.run(**schedule)
                     log_debug(f"handle_event done: {name}, res: {str(res)}")
 
                     client_info = schedule["client"]
-                    schedule_name = self.create_client_unique_name(client_info)
+                    schedule_name = self.generate_client_unique_name(client_info)
 
                     # 4. put the next schedule
                     self.postprocess_schedule(res, id, schedule_name, schedule)
@@ -408,7 +410,8 @@ class Scheduler:
                 new_schedule_task["status"] = ScheduleTaskStatus.IDLE
 
                 # 3.3. set the evetn to the localqueue
-                self.schedule_queue.put(schedule_id, schedule_name, next_time, schedule)
+                # self.schedule_queue.put(schedule_id, schedule_name, next_time, schedule)
+                self.schedule_queue.update(schedule_id, next_time, schedule)
             # 4. check if scheluer event type is non-recurring
             else:
                 # 4.1 check if the result of the previous task run is successful

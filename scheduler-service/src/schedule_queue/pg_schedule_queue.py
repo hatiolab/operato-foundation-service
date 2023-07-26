@@ -87,10 +87,6 @@ class PGScheduleQueue(ScheduleQueue):
 
         self.check_database_initialized()
 
-        # delete the existed schedule with the same id
-        (dup_id, _, _, _) = self.get_with_name(name, True)
-        dup_id and self.delete_with_id(dup_id)
-
         # TODO: need to configure this table name
         table_name = PGScheduleQueue.SCHEDULE_TABLE
 
@@ -308,3 +304,65 @@ class PGScheduleQueue(ScheduleQueue):
             self._generate_schedule_dict(pop_result[0], pop_result[3])
             for pop_result in pop_results
         ]
+
+    def update(self, id, next_schedule, payload):
+        """
+        기존 존재하는 id의 schedule을 업데이트한다.
+        업데이트된 schedule은 다음번에 pop될 때 반영될 수 있도록, processing_started_at 컬럼을 초기화(NULL)한다.
+        이렇게 초기화된 schedule은 다음번에 pop될 때 반영된다.
+
+        """
+
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        payload_str = json.dumps(payload) if type(payload) == dict else payload
+
+        sql_update = f"""
+        UPDATE {table_name} SET next_schedule = %s, processing_started_at = NULL, payload = %s where id = %s;
+        """
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_update, (next_schedule, payload_str, id))
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+
+    def initialize(self) -> None:
+        """
+        단발성이 아닌 스케줄들에서 processing_started_at 컬럼을 초기화한다.
+        예상하지 못한 예외 사항 발생 등으로 스케줄의 상태가 어긋날 경우를 대비해서 초기에 상태를 초기화한다.
+
+        """
+
+        self.check_database_initialized()
+
+        # TODO: need to configure this table name
+        table_name = PGScheduleQueue.SCHEDULE_TABLE
+
+        sql_get = f"""
+        SELECT id, name, next_schedule, payload from {table_name};
+
+        """
+
+        sql_update = f"""
+        UPDATE {table_name} SET processing_started_at = NULL WHERE id = %s;
+        """
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_get)
+                fetch_results = cursor.fetchall()
+
+                for fetch_result in fetch_results:
+                    fetched_id = fetch_result[0]
+                    fetched_payload = fetch_result[3]
+                    fetched_payload_dict = json.loads(fetched_payload)
+                    if fetched_payload_dict["type"] in ["delay_recur", "cron"]:
+                        cursor.execute(sql_update, (fetched_id,))
+                self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
