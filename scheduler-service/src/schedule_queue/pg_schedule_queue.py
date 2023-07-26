@@ -6,10 +6,11 @@ import psycopg2 as pg2
 from datetime import datetime
 
 from schedule_queue.queue_abstraction import ScheduleQueue
+from config import Config
 
 
 class PGScheduleQueue(ScheduleQueue):
-    SCHEDULE_TABLE = "schedule_queue"
+    SCHEDULE_TABLE = Config.scheduler_table() or "schedule_queue"
 
     def __init__(self, db_config):
         self.initialized: bool = False
@@ -285,7 +286,7 @@ class PGScheduleQueue(ScheduleQueue):
             WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
             ORDER By sqInner.next_schedule ASC
             LIMIT 1
-            FOR UPDATE
+            FOR UPDATE SKIP LOCKED
         )
         RETURNING sq.id, sq.name, sq.next_schedule, sq.payload
         """

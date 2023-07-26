@@ -44,6 +44,9 @@ class Scheduler:
                 self.schedule_queue = PGScheduleQueue(database_info)
                 self.running_schedules = dict()
                 self.finalized = False
+                self.fetch_interval = Config.get("scheduler").get("fetch_interval", 0.5)
+                self.fetch_count = Config.get("scheduler").get("fetch_count", 1)
+
                 cls._init = True
             except Exception as ex:
                 raise ex
@@ -54,7 +57,10 @@ class Scheduler:
 
         # 1. pop the schedule with the lowest next_schedule value
         scheduler = cls()
-        schedules = scheduler.schedule_queue.pop()
+        schedules = list()
+        for _ in range(scheduler.fetch_count):
+            schedule = scheduler.schedule_queue.pop()
+            schedules += schedule
         log_debug(f"schedules: {schedules}")
 
         if len(schedules) > 0:
@@ -63,7 +69,9 @@ class Scheduler:
         # TODO: 0.5(500ms) is a part of this application configuration.
         if not scheduler.finalized:
             threading.Timer(
-                0.5, Scheduler.do_periodic_process, args=(async_process_loop,)
+                scheduler.fetch_interval,
+                Scheduler.do_periodic_process,
+                args=(async_process_loop,),
             ).start()
 
     def start_schedule(self):
@@ -433,6 +441,8 @@ class Scheduler:
         변경된 스케줄큐 구조에서 이력을 별도의 테이블로 관리하는 것에 대한 고려가 필요함.
         별도의 테이블 없이 스케줄큐 테이블을 통해서 별도의 스케줄 처리에 대한 이력(스케줄 시작 여부, 상태 등)을
         관리할 수 있다면, 구조를 단순화하는 차원에서 하나의 테이블로 관리하는 것이 좋을 것 같음.
+
+        히스토리 테이블의 효용성에 대한 검증 이후에 확인 필요.
 
         """
         try:

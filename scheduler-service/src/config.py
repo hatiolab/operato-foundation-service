@@ -67,10 +67,21 @@ class Config:
                 "table", "schedule_queue"
             )
         except Exception as ex:
-            print(f"invalid configuration(history): \n{ex}")
+            print(f"invalid configuration(scheduler): \n{ex}")
             print("using default table name(schedule_queue)")
             scheduler_table = "schedule_queue"
         return scheduler_table
+
+    @classmethod
+    def scheduler_info(cls):
+        try:
+            assert cls.CONFIG_DATA.get("scheduler")
+            scheduler = cls.CONFIG_DATA.get("scheduler")
+        except Exception as ex:
+            print(f"invalid configuration(scheduler): \n{ex}")
+            print("using default table name(schedule_queue)")
+            scheduler = {}
+        return scheduler
 
 
 if __name__ == "__main__":

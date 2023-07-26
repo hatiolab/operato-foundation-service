@@ -6,9 +6,11 @@ from history.db_engine import BASE
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 
+from config import Config
+
 
 class ScheduleEventHistory(BASE):
-    __tablename__ = "schedule_event_history"
+    __tablename__ = Config.history_table() or "schedule_history"
 
     id = Column(Integer, primary_key=True)
     event = Column(String)

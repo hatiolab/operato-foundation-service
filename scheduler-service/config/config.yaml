@@ -7,12 +7,11 @@ database:
   db: scheduler
 
 scheduler:
-  fetch_interval: 100
-  fetch_count: 10
+  fetch_interval: 0.5
+  fetch_count: 1
   table: schedule_queue
 
 history:
-  enable: false
   table: schedule_history
 
 
