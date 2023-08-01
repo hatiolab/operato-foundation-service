@@ -21,7 +21,11 @@ from history.tables.table_schedule_history import ScheduleEventHistory
 import sys
 from helper.logger import Logger
 
-log_message = Logger.get("scheduler", Logger.Level.DEBUG, sys.stdout)
+log_message = Logger.get(
+    "scheduler",
+    Logger.Level.DEBUG if Config.scheduler_debug() else Logger.Level.INFO,
+    sys.stdout,
+)
 
 log_debug = log_message.debug
 log_info = log_message.info
@@ -54,30 +58,7 @@ class Scheduler:
                 raise ex
 
     @classmethod
-    def do_periodic_process(cls, async_process_loop):
-        log_debug(f"called do_periodic_process: {str(datetime.now())}")
-
-        # 1. pop the schedule with the lowest next_schedule value
-        scheduler = cls()
-        schedules = list()
-        for _ in range(scheduler.fetch_count):
-            schedule = scheduler.schedule_queue.pop()
-            schedules += schedule
-        log_debug(f"schedules: {schedules}")
-
-        if len(schedules) > 0:
-            scheduler.run_process_schedules(schedules, async_process_loop)
-
-        # TODO: 0.5(500ms) is a part of this application configuration.
-        if not scheduler.finalized:
-            threading.Timer(
-                scheduler.fetch_interval,
-                Scheduler.do_periodic_process,
-                args=(async_process_loop,),
-            ).start()
-
-    @classmethod
-    def do_periodic_process_with_thread(cls, async_process_loop):
+    def fetch_schedules_periodically(cls, async_process_loop):
         log_debug(f"called do_periodic_process: {str(datetime.now())}")
 
         scheduler = cls()
@@ -90,45 +71,19 @@ class Scheduler:
             log_debug(f"schedules: {schedules}")
 
             if len(schedules) > 0:
-                scheduler.run_process_schedules(schedules, async_process_loop)
+                scheduler.start_process_schedules(schedules, async_process_loop)
 
             # TODO: 0.5(500ms) is a part of this application configuration.
             sleep(scheduler.fetch_interval)
 
-    async def do_periodic_process_with_async(self):
-        log_debug(f"called do_periodic_process(async): {str(datetime.now())}")
-
-        # TODO: need to do something when exiting this instance
-        while True:
-            # 1. pop the schedule with the lowest next_schedule value
-            schedules = list()
-            for _ in range(self.fetch_count):
-                schedule = self.schedule_queue.pop()
-                schedules += schedule
-            log_debug(f"schedules: {schedules}")
-
-            if len(schedules) > 0:
-                await self.process_schedules(schedules)
-
-            asyncio.sleep(self.fetch_interval)
-
-    def start_schedule_using_Timer(self):
-        Scheduler.do_periodic_process(asyncio.get_event_loop())
-
-    def start_schedule(self):
+    def start_fetch_schedules(self):
         self.schedule_thread = threading.Thread(
-            target=Scheduler.do_periodic_process_with_thread,
+            target=Scheduler.fetch_schedules_periodically,
             args=[
                 asyncio.get_event_loop(),
             ],
         )
         self.schedule_thread.start()
-
-    def start_schedule_using_async(self):
-        asyncio.run_coroutine_threadsafe(
-            self.do_periodic_process_with_async(),
-            asyncio.get_event_loop(),
-        )
 
     def stop_schedule(self):
         self.finalized = True
@@ -138,7 +93,7 @@ class Scheduler:
             # 1. initialize the schedule queue
             self.schedule_queue.initialize()
             # 2. start the periodic process
-            self.start_schedule()
+            self.start_fetch_schedules()
             log_info("initialization done..")
         except Exception as ex:
             log_error(f"Initializaiton Error: {ex}")
@@ -380,7 +335,7 @@ class Scheduler:
         # self.schedule_queue.put(schedule_id, schedule_name, schedule["next"], schedule)
         self.schedule_queue.update(schedule_id, schedule["next"], schedule)
 
-    def run_process_schedules(self, schedules: list, async_process_loop):
+    def start_process_schedules(self, schedules: list, async_process_loop):
         # start a schedule event task
         handle_event_future = asyncio.run_coroutine_threadsafe(
             self.process_schedules(schedules),
@@ -452,12 +407,12 @@ class Scheduler:
             tz = schedule.get("timezone", "Asia/Seoul")
 
             """
-            기본적으로 일정한 주기를 가지는 스케줄이 태스크 동작을 실패할 경우,
+            기본적으로 일정한 주기를 가지는 스케줄(cron, delay_recur)이 태스크 동작을 실패할 경우,
             동일한 태스크가 다음 주기에 수행되도록 스케줄링된다.
             해당 태스크는 최대 재시도 횟수(max_retry_count) 만큼 수행되고 실패할 경우, 
             더 이상 스케줄링에 포함되지 않는다.
 
-            주기를 별도로 가지고 있지 않는 1회성 스케줄의 경우,
+            주기를 별도로 가지고 있지 않는 1회성 스케줄(delay, date)의 경우,
             기본 설정된 최대 재시도 횟수(max_retry_count) 외에 재시작 대기 시간(retry_wait, 기본값: 60초)을 가지고 있어,
             실패한 시점부터 재시작 대기 시간(retry_wait) 이후에 다시 수행된다.
             최대 재시도 횟수(max_retry_count) 만큼 수행되고 실패할 경우, 
@@ -467,7 +422,7 @@ class Scheduler:
             # 3. check if schedule event type is recurring
             if ScheduleType.is_recurring(schedule["type"]):
                 # 3.1. calculate the next timestamp and delay based on schedule
-                (next_time, delay) = ScheduleType.get_next_and_delay(schedule, tz)
+                (next_time, _) = ScheduleType.get_next_and_delay(schedule, tz)
                 new_schedule_task = schedule["task"]
                 new_schedule_task["next"] = next_time
 

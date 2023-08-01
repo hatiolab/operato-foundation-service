@@ -54,12 +54,6 @@ class ScheduleType:
     def get_next_and_delay(schedule_event, tz):
         base = datetime.now().astimezone(pytz.timezone(tz))
         if schedule_event["type"] == ScheduleType.CRON:
-            # cron_elements = (
-            #     schedule_event["schedule"].split()
-            #     if type(schedule_event["schedule"]) is str
-            #     else str(schedule_event["schedule"]).split()
-            # )
-
             next_time = None
             delay = 0
             """
@@ -87,5 +81,12 @@ class ScheduleType:
             delay = next_time - datetime.timestamp(base)
         else:
             raise Exception("Invalid schedule type")
+
+        """
+        next_time은 해당 스케줄이 다음에 실핸될 시간을 타임스탬프로 반환한다.
+        delay는 현재 시점에서 몇 초 후에 실행될지를 반환한다.
+        delay는 현재는 사용되지 않고 있다.
+        
+        """
 
         return (int(next_time), delay if delay >= 0 else 0)

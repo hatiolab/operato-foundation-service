@@ -83,6 +83,17 @@ class Config:
             scheduler = {}
         return scheduler
 
+    @classmethod
+    def scheduler_debug(cls) -> bool:
+        try:
+            assert cls.CONFIG_DATA.get("scheduler")
+            debug_enable = cls.CONFIG_DATA.get("scheduler").get("debug", False)
+        except Exception as ex:
+            print(f"invalid configuration(scheduler): \n{ex}")
+            print("using default flag(False)")
+            debug_enable = False
+        return debug_enable
+
 
 if __name__ == "__main__":
     conf = Config("/Users/jinwonchoi/github/ms2postgres/config/config.yaml")
