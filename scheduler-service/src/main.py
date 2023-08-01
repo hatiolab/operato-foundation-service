@@ -18,19 +18,10 @@ if __name__ == "__main__":
 
     # run fastapi server using uvicorn
     uvicorn.run(
-        "api.api_main:fast_api",
+        "restful.rest_main:fast_api",
         host="0.0.0.0",
         port=port,
         log_level="info",
         reload=True,
         timeout_keep_alive=3600,
     )
-
-    # # run graphql server using uvicorn
-    # uvicorn.run(
-    #     "gql.gql_main:fast_api",
-    #     host="0.0.0.0",
-    #     port=port + 1,
-    #     log_level="info",
-    #     reload=True,
-    # )

@@ -2,9 +2,9 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: schevt-mgr
-  name: schevt-mgr-svc
-  namespace: schevt
+    app: scheduler
+  name: scheduler-svc
+  namespace: hfsvc
 spec:
   type: ClusterIP
   ports:
@@ -12,4 +12,4 @@ spec:
       port: 80
       targetPort: 9902
   selector:
-    app: schevt-mgr
+    app: scheduler

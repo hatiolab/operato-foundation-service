@@ -34,7 +34,7 @@ class ScheduleTask(BaseModel):
     )
     failed_policy: Optional[ScheduleTaskFailurePolicy] = Field(
         default=ScheduleTaskFailurePolicy.IGNORE,
-        title="Task failure policy [ignore | retry | retry_dlq]",
+        title="Task failure policy [ignore | retry]",
     )
     retry_wait: Optional[int] = Field(
         default=60,
@@ -66,10 +66,12 @@ class Schedule(BaseModel):
     task: ScheduleTask
     id: Optional[str] = Field(default="", title="Schedule id")
 
+
 class ScheduleResult(BaseModel):
     name: str = Field(default="", title="Schedule name")
     client: ScheduleClient
     id: str = Field(default="", title="Schedule id")
+
 
 class ScheduleResultCount(BaseModel):
     count: int = Field(default=0, title="Schedule count")

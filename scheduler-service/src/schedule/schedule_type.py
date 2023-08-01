@@ -3,8 +3,6 @@ from datetime import datetime
 
 # from croniter import croniter
 import pytz
-
-from schedule.schedule_util import calculate_cron_unit
 from schedule.schedule_cron import CronTime
 
 import sys
@@ -22,16 +20,14 @@ log_error = log_message.error
 class ScheduleTaskFailurePolicy(str, Enum):
     IGNORE = "ignore"
     RETRY = "retry"
-    RETRY_DLQ = "retry_dlq"
 
 
 class ScheduleTaskStatus:
     IDLE = "idle"
-    WAITING = "waiting"
     PROCESSING = "processing"
-    RETRY = "retry"
     DONE = "done"
     FAILED = "failed"
+    INVALIDITY = "invalidity"
 
 
 class ScheduleType:
@@ -59,12 +55,6 @@ class ScheduleType:
     def get_next_and_delay(schedule_event, tz):
         base = datetime.now().astimezone(pytz.timezone(tz))
         if schedule_event["type"] == ScheduleType.CRON:
-            # cron_elements = (
-            #     schedule_event["schedule"].split()
-            #     if type(schedule_event["schedule"]) is str
-            #     else str(schedule_event["schedule"]).split()
-            # )
-
             next_time = None
             delay = 0
             """
@@ -74,21 +64,6 @@ class ScheduleType:
             next_datetime = cron_time.get_next(base, "Asia/Seoul")
             next_time = next_datetime.timestamp()
             delay = next_time - datetime.timestamp(base)
-
-            # if len(cron_elements) == 5:
-            #     utc_cron = Converter(schedule_event["schedule"], tz).to_utc_cron()
-            #     iter = croniter(utc_cron, base)
-            #     next_time = datetime.timestamp(iter.get_next(datetime))
-            #     delay = next_time - datetime.timestamp(base)
-            # elif len(cron_elements) == 6:
-            #     schedule_data = " ".join(cron_elements[1:])
-            #     utc_cron = Converter(schedule_data, tz).to_utc_cron()
-            #     iter = croniter(utc_cron, base)
-            #     next_time = datetime.timestamp(iter.get_next(datetime))
-            #     secs = calculate_cron_unit(cron_elements[0])
-            #     delay = next_time - datetime.timestamp(base) + secs
-            # else:
-            #     raise Exception(f'wrong format error: {schedule_event["schedule"]}')
         elif (
             schedule_event["type"] == ScheduleType.DELAY_RECUR
             or schedule_event["type"] == ScheduleType.DELAY
@@ -107,5 +82,12 @@ class ScheduleType:
             delay = next_time - datetime.timestamp(base)
         else:
             raise Exception("Invalid schedule type")
+
+        """
+        next_time은 해당 스케줄이 다음에 실핸될 시간을 타임스탬프로 반환한다.
+        delay는 현재 시점에서 몇 초 후에 실행될지를 반환한다.
+        delay는 현재는 사용되지 않고 있다.
+        
+        """
 
         return (int(next_time), delay if delay >= 0 else 0)

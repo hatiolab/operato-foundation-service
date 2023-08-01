@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 httpx
 croniter
-lmdb
 psycopg2
 aiokafka
 aioredis
@@ -10,6 +9,5 @@ sqlalchemy
 dataclasses-json
 SQLAlchemy-Utils
 email-validator
-strawberry-graphql[fastapi]
 pyjwt
 pytz
