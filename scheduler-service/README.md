@@ -6,16 +6,25 @@
 - 스케줄러 처리의 부하를 분산하기 위해서 새롭게 설계된 구조로서 스케줄러는 데이터베이스 기반의 큐 구조를 사용하여 모든 스케줄 데이터를 관리
 - 스케줄러는 다음과 같이 미리 정의된 주기를 기반으로 스케줄큐의 데이터를 처리하도록 구현.(실제 확인 결과 스케줄 처리를 수행하지 않을 경우 6m CPU를 사용.)
   ```bash
-  NAME                        CPU(cores)   MEMORY(bytes)   
-  scheduler-b5bc94d64-4xkvp   6m           89Mi            
-  scheduler-b5bc94d64-cwmdw   6m           89Mi            
-  scheduler-b5bc94d64-rmnlg   6m           89Mi 
+  NAME                         CPU(cores)   MEMORY(bytes)
+  scheduler-75c5b45dc4-cvfmq   9m           106Mi
+  scheduler-75c5b45dc4-qbgx6   10m          110Mi
+  scheduler-75c5b45dc4-ttxhq   8m           108Mi
   ```
-- 스케줄러의 주기적 처리에 대한 Diagram
+### 스케줄러의 주기적 처리에 대한 Diagram
+  
 ![Periodic Scheduler Diagram](./assets/updated-scheduler-diagram-periodic.png "Periodic Scheduler Diagram")
 
-- (대안) 스케줄러의 깨어나는 시점을 또다른 모니터링 인스턴스가 주기적으로 확인해서 모든 스케줄러에게 PublisH하는 구조
+- 구조가 간결하고 추가적인 다른 서비스 없이 운용 가능하다는 점이 장점
+- 각 인스턴스가 휴지 기간 없이 주기적으로 깨어나서 데이터베이스 내에 스케줄 큐를 확인해야 한다는 점이 단점.
+
+### (대안) 스케줄러의 깨어나는 시점을 또다른 모니터링 인스턴스가 주기적으로 확인해서 모든 스케줄러에게 Publish하는 구조
+  
 ![Pubsub Scheduler Diagram](./assets/updated-scheduler-diagram-pubsub.png "Pubsub Scheduler Diagram")
+
+- 모든 인스턴스는 모니터링 인스턴스를 통해서 받는 다음 스케줄의 타임스탬프 정보에 의해서 스케줄 처리를 수행.
+- 추가적인 서비스(redis) 필요하며, 개별 인스턴스는 지속적으로 다음 스케줄에 대한 정보를 가지고 있어야 함.
+
   
 
 ## MSA 기반의 스케줄러 서비스
