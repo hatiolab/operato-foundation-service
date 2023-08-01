@@ -3,7 +3,9 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import HTTPException
 import threading
+
 from datetime import datetime
+from time import sleep
 
 from restful.rest_type import Schedule
 from config import Config
@@ -19,7 +21,7 @@ from history.tables.table_schedule_history import ScheduleEventHistory
 import sys
 from helper.logger import Logger
 
-log_message = Logger.get("scheduler", Logger.Level.INFO, sys.stdout)
+log_message = Logger.get("scheduler", Logger.Level.DEBUG, sys.stdout)
 
 log_debug = log_message.debug
 log_info = log_message.info
@@ -74,8 +76,59 @@ class Scheduler:
                 args=(async_process_loop,),
             ).start()
 
-    def start_schedule(self):
+    @classmethod
+    def do_periodic_process_with_thread(cls, async_process_loop):
+        log_debug(f"called do_periodic_process: {str(datetime.now())}")
+
+        scheduler = cls()
+        while not scheduler.finalized:
+            # 1. pop the schedule with the lowest next_schedule value
+            schedules = list()
+            for _ in range(scheduler.fetch_count):
+                schedule = scheduler.schedule_queue.pop()
+                schedules += schedule
+            log_debug(f"schedules: {schedules}")
+
+            if len(schedules) > 0:
+                scheduler.run_process_schedules(schedules, async_process_loop)
+
+            # TODO: 0.5(500ms) is a part of this application configuration.
+            sleep(scheduler.fetch_interval)
+
+    async def do_periodic_process_with_async(self):
+        log_debug(f"called do_periodic_process(async): {str(datetime.now())}")
+
+        # TODO: need to do something when exiting this instance
+        while True:
+            # 1. pop the schedule with the lowest next_schedule value
+            schedules = list()
+            for _ in range(self.fetch_count):
+                schedule = self.schedule_queue.pop()
+                schedules += schedule
+            log_debug(f"schedules: {schedules}")
+
+            if len(schedules) > 0:
+                await self.process_schedules(schedules)
+
+            asyncio.sleep(self.fetch_interval)
+
+    def start_schedule_using_Timer(self):
         Scheduler.do_periodic_process(asyncio.get_event_loop())
+
+    def start_schedule(self):
+        self.schedule_thread = threading.Thread(
+            target=Scheduler.do_periodic_process_with_thread,
+            args=[
+                asyncio.get_event_loop(),
+            ],
+        )
+        self.schedule_thread.start()
+
+    def start_schedule_using_async(self):
+        asyncio.run_coroutine_threadsafe(
+            self.do_periodic_process_with_async(),
+            asyncio.get_event_loop(),
+        )
 
     def stop_schedule(self):
         self.finalized = True
@@ -128,6 +181,10 @@ class Scheduler:
         )
 
     def register(self, schedule: Schedule):
+        """
+        TODO: 초기 설정 시에 등록된 스케줄을 바로 실행하는 구조가 아니고,
+        말 그대로 동작만 하는 경우로서 예외가 없는지 확인이 필요하다.
+        """
         try:
             schedule_event = schedule.dict()
 

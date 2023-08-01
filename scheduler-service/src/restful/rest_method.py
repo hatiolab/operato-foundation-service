@@ -24,7 +24,7 @@ def restapi_register(schedule: Schedule):
 def restapi_delete_schedule_with_id(
     schedule_id: str,
 ):
-    log_info(f"request delete: {schedule_id}")
+    log_info(f"request delete(id): {schedule_id}")
     scheduler = Scheduler()
     return scheduler.delete_schedules_with_id(schedule_id)
 
@@ -37,7 +37,7 @@ def restapi_delete_schedule_with_client(
     client_type: str = "",
 ):
     log_info(
-        f"request delete: {client_operation}, {client_application}, {client_group}, {client_key}, {client_type}"
+        f"request delete(client): {client_operation}, {client_application}, {client_group}, {client_key}, {client_type}"
     )
     scheduler = Scheduler()
     return scheduler.delete_schedules_with_client(
@@ -62,7 +62,7 @@ def restapi_get_schedules_with_client(
     dlq: bool = False,
 ) -> list:
     log_info(
-        f"request get_schedules - group({client_group}), application({client_application}), operation({client_operation}), key({client_key}, type({client_type}))"
+        f"request get_schedules(client) - group({client_group}), application({client_application}), operation({client_operation}), key({client_key}, type({client_type}))"
     )
     schedule_handler = Scheduler()
     return schedule_handler.get_schedules_with_client(
