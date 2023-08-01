@@ -27,6 +27,7 @@ class ScheduleTaskStatus:
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    INVALIDITY = "invalidity"
 
 
 class ScheduleType:

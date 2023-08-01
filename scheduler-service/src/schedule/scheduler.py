@@ -355,6 +355,10 @@ class Scheduler:
                 task_info = schedule["task"]
 
                 try:
+                    # 1. check if this schedule is valid
+                    if task_info["status"] == ScheduleTaskStatus.INVALIDITY:
+                        continue
+
                     # set the status of this task to 'processing'
                     task_info["status"] = ScheduleTaskStatus.PROCESSING
 
@@ -402,6 +406,25 @@ class Scheduler:
                 # 1.1 if the result of task run is successful, update the status of this task
                 task_info["status"] = ScheduleTaskStatus.FAILED
                 task_info["retry_count"] += 1
+                retry_count = task_info.get("retry_count", 0)
+                max_retry_count = task_info.get("max_retry_count", -1)
+
+                """
+                TODO:
+                지속적으로 해당 스케줄이 에러가 발생했을 경우에, 
+                사용자가 해당 스케줄이 정상적으로 실행되지 않았음을 확인하기 위한 방법은 오로지, 직접 로그 혹은 스케줄 상태를 확인하는 것이다. 
+                이러한 에러 상태 확인이 불편하다는 점을 고려하여, 추후 별도의 알림 기능이 필요할 수 있다.
+
+                또한 이렇게 무효화된 태스크를 지속적으로 남겨둘 경우, 지속적으로 스케줄 큐에 남아서, 부하의 원인이 될 수 있으므로,
+                이를 정리할 필요성이 있는데 이에 대한 방안을 추후 마련할 필요가 있다.
+                
+                """
+                if (max_retry_count != -1) and (retry_count >= max_retry_count):
+                    log_info(
+                        f"Retry count({retry_count}) is over max_retry_count({max_retry_count})."
+                    )
+                    task_info["status"] = ScheduleTaskStatus.INVALIDITY
+                    return
 
             # 2. get the schedule timezone
             tz = schedule.get("timezone", "Asia/Seoul")
@@ -462,6 +485,8 @@ class Scheduler:
             client_info = schedule_event.get("client", {})
             if task_info:
                 hischeck = task_info.get("history_check", False)
+                # TODO: check if history fucntion is necessary...
+                hischeck = False
                 db_connection_info = Config.history()
                 if hischeck and db_connection_info:
                     (host, port, id, pw, db) = db_connection_info
