@@ -4,7 +4,7 @@ database:
   port: 55432
   id: postgres
   pw: abcd1234
-  db: scheduler
+  db: postgres
 
 scheduler:
   debug: false

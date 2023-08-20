@@ -68,7 +68,10 @@ class Scheduler:
             for _ in range(scheduler.fetch_count):
                 schedule = scheduler.schedule_queue.pop()
                 schedules += schedule
-            log_debug(f"schedules: {schedules}")
+            if len(schedule) > 0:
+                log_info(f"schedules: {schedules}")
+            else:
+                log_debug(f"schedules: {schedules}")
 
             if len(schedules) > 0:
                 scheduler.start_process_schedules(schedules, async_process_loop)
