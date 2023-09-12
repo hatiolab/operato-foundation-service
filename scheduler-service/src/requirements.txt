@@ -11,3 +11,4 @@ SQLAlchemy-Utils
 email-validator
 pyjwt
 pytz
+oracledb

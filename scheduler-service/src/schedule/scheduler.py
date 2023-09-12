@@ -10,6 +10,7 @@ from time import sleep
 from restful.rest_type import Schedule
 from config import Config
 from schedule_queue.pg_schedule_queue import PGScheduleQueue
+from schedule_queue.oracle_schedule_queue import OracleScheduleQueue
 from schedule.schedule_type import ScheduleType, ScheduleTaskStatus
 from task.task_mgr import TaskManager
 from task.task_import import TASK_ACTIVE_MODULE_LIST
@@ -47,7 +48,12 @@ class Scheduler:
             try:
                 # TODO: need to the generalization of schedule_queue creation...
                 database_info = Config.database()
-                self.schedule_queue = PGScheduleQueue(database_info)
+                database_type = database_info.get("type", "pg")
+                self.schedule_queue = (
+                    OracleScheduleQueue(database_info)
+                    if database_type == "oracle"
+                    else PGScheduleQueue(database_info)
+                )
                 self.running_schedules = dict()
                 self.finalized = False
                 self.fetch_interval = Config.get("scheduler").get("fetch_interval", 0.5)

@@ -33,13 +33,7 @@ class Config:
             config_data = cls.CONFIG_DATA.get("database", None)
             if not config_data:
                 return None
-            assert (
-                config_data["host"]
-                and config_data["port"]
-                and config_data["id"]
-                and config_data["pw"]
-                and config_data["db"]
-            )
+            assert config_data["id"] and config_data["pw"]
         except Exception as ex:
             print(f"invalid configuration(pg): \n{ex}")
             config_data = None
