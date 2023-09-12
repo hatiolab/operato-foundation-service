@@ -7,7 +7,7 @@ metadata:
   name: scheduler
   namespace: hfsvc
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: scheduler
@@ -19,7 +19,7 @@ spec:
         app: scheduler
     spec:
       containers:
-        - image: hatiolab/scheduler:0.3.5
+        - image: hatiolab/scheduler:0.3.6
           imagePullPolicy: Always
           name: scheduler
           ports:
