@@ -57,7 +57,7 @@ class TaskRest(Task):
                 self.host,
                 headers=headers,
                 data=data,
-                timeout=httpx.Timeout(timeout=None),
+                timeout=httpx.Timeout(timeout=10.0),
             )
             log_debug(f"result: {res.status_code}")
             result = True if res.status_code == 200 else False
