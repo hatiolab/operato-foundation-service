@@ -40,22 +40,72 @@ class OracleScheduleQueue(ScheduleQueue):
             """
 
             # ERROR POINT: 오라클에서 CREATE TABLE IF NOT EXISTS 를 지원하지 않는다.
+            """
+            
+            DECLARE
+                table_count NUMBER;
+            BEGIN
+            SELECT COUNT(*)
+            INTO table_count
+            FROM user_tables
+            WHERE table_name = 'SCHEDULE_QUEUE';
+
+            IF table_count = 0 THEN
+                EXECUTE IMMEDIATE '
+                CREATE TABLE schedule_queue (
+                    id RAW(16) NOT NULL PRIMARY KEY,
+                    name VARCHAR2(255) NOT NULL UNIQUE,
+                    next_schedule NUMBER,
+                    created_at TIMESTAMP NOT NULL,
+                    processing_started_at TIMESTAMP,
+                    payload CLOB
+                )';
+            END IF;
+            END;
+            /
+            
+            
+            """
+
             with self.dbconn.cursor() as cursor:
                 cursor.execute(
                     f"""
-                        CREATE TABLE IF NOT EXISTS schedule_queue (
-                            id UUID NOT NULL PRIMARY KEY,
-                            name VARCHAR(255) NOT NULL UNIQUE,
-                            next_schedule bigint,
-                            created_at TIMESTAMP NOT NULL,
-                            processing_started_at TIMESTAMP,
-                            payload TEXT
-                        );
+                        DECLARE
+                            table_count NUMBER;
+                        BEGIN
+                        SELECT COUNT(*)
+                        INTO table_count
+                        FROM user_tables
+                        WHERE table_name = 'SCHEDULE_QUEUE';
+                            IF table_count = 0 THEN
+                                EXECUTE IMMEDIATE '
+                                CREATE TABLE schedule_queue (
+                                    id RAW(16) NOT NULL PRIMARY KEY,
+                                    name VARCHAR2(255) NOT NULL UNIQUE,
+                                    next_schedule NUMBER,
+                                    created_at TIMESTAMP NOT NULL,
+                                    processing_started_at TIMESTAMP,
+                                    payload CLOB
+                                )';
+                            END IF;
+                        END;
+                    """
+                )
 
-                        CREATE INDEX IF NOT EXISTS ix_schedule_queue_pop on schedule_queue (next_schedule ASC)
-                        INCLUDE (id)
-                        WHERE processing_started_at IS NULL;
+                cursor.execute(
+                    f"""
+                        DECLARE
+                            v_index_exists INTEGER;
+                        BEGIN
+                            SELECT COUNT(*)
+                            INTO v_index_exists
+                            FROM user_indexes
+                            WHERE index_name = 'IX_SCHEDULE_QUEUE_POP';
 
+                            IF v_index_exists = 0 THEN
+                                EXECUTE IMMEDIATE 'CREATE INDEX ix_schedule_queue_pop ON schedule_queue (CASE WHEN processing_started_at IS NULL THEN next_schedule END)';
+                            END IF;
+                        END;
                     """
                 )
 
@@ -279,15 +329,20 @@ class OracleScheduleQueue(ScheduleQueue):
         table_name = OracleScheduleQueue.SCHEDULE_TABLE
 
         sql_pop = f"""
-        UPDATE {table_name} as sq SET processing_started_at = '{str(datetime.utcnow())}'
-        WHERE sq.id = (
-            SELECT sqInner.id FROM {table_name} sqInner
-            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
-            ORDER By sqInner.next_schedule ASC
-            LIMIT 1
+        UPDATE {table_name}
+        SET processing_started_at = '{str(datetime.utcnow())}'
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id
+                FROM {table_name}
+                WHERE processing_started_at IS NULL AND next_schedule <= {int(time.time())}
+                ORDER BY next_schedule ASC
+            )
+            WHERE ROWNUM = 1
             FOR UPDATE SKIP LOCKED
         )
-        RETURNING sq.id, sq.name, sq.next_schedule, sq.payload
+        RETURNING id, name, next_schedule, payload;
         """
 
         try:
