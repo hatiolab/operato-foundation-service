@@ -100,6 +100,8 @@ class PGScheduleQueue(ScheduleQueue):
             DO UPDATE SET (next_schedule, payload) = (EXCLUDED.next_schedule, EXCLUDED.payload);
         """
 
+        print("put next_schedule: ", next_schedule)
+
         with self.dbconn.cursor() as cursor:
             cursor.execute(
                 sql_put,
@@ -273,7 +275,7 @@ class PGScheduleQueue(ScheduleQueue):
             self._generate_schedule_dict(result[0], result[2]) for result in results
         ]
 
-    def pop(self):
+    def pop(self, current_timestamp: int):
         self.check_database_initialized()
 
         # TODO: need to configure this table name
@@ -283,7 +285,7 @@ class PGScheduleQueue(ScheduleQueue):
         UPDATE {table_name} as sq SET processing_started_at = '{str(datetime.utcnow())}'
         WHERE sq.id = (
             SELECT sqInner.id FROM {table_name} sqInner
-            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {int(time.time())}
+            WHERE sqInner.processing_started_at IS NULL AND sqInner.next_schedule <= {current_timestamp}
             ORDER By sqInner.next_schedule ASC
             LIMIT 1
             FOR UPDATE SKIP LOCKED
@@ -295,8 +297,6 @@ class PGScheduleQueue(ScheduleQueue):
             with self.dbconn.cursor() as cursor:
                 cursor.execute(sql_pop)
                 pop_results = cursor.fetchall()
-
-            self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
             pop_results = []
@@ -324,6 +324,7 @@ class PGScheduleQueue(ScheduleQueue):
         sql_update = f"""
         UPDATE {table_name} SET next_schedule = %s, processing_started_at = NULL, payload = %s where id = %s;
         """
+        print("UPDATE next_schedule: ", datetime.fromtimestamp(next_schedule))
 
         try:
             with self.dbconn.cursor() as cursor:

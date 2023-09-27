@@ -5,7 +5,7 @@ from fastapi import HTTPException
 import threading
 
 from datetime import datetime
-from time import sleep
+from time import sleep, time
 
 from restful.rest_type import Schedule
 from config import Config
@@ -66,9 +66,12 @@ class Scheduler:
             # 1. pop the schedule with the lowest next_schedule value
             schedules = list()
             for _ in range(scheduler.fetch_count):
-                schedule = scheduler.schedule_queue.pop()
+                current_timestamp = int(time())
+                log_debug(f"POP current_timestamp: {current_timestamp}")
+                schedule = scheduler.schedule_queue.pop(current_timestamp)
                 schedules += schedule
-            if len(schedule) > 0:
+
+            if len(schedules) > 0:
                 log_info(f"schedules: {schedules}")
             else:
                 log_debug(f"schedules: {schedules}")
@@ -406,7 +409,7 @@ class Scheduler:
                 task_info["iteration"] += 1
                 task_info["retry_count"] = 0
             else:
-                # 1.1 if the result of task run is successful, update the status of this task
+                # 1.2 if the result of task run is successful, update the status of this task
                 task_info["status"] = ScheduleTaskStatus.FAILED
                 task_info["retry_count"] += 1
                 retry_count = task_info.get("retry_count", 0)
@@ -427,6 +430,9 @@ class Scheduler:
                         f"Retry count({retry_count}) is over max_retry_count({max_retry_count})."
                     )
                     task_info["status"] = ScheduleTaskStatus.INVALIDITY
+
+                    # 1.3 delete this invalidated schedule reached the max retry count
+                    self.schedule_queue.delete_with_id(schedule_id)
                     return
 
             # 2. get the schedule timezone
