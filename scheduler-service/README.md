@@ -253,13 +253,32 @@ brew install postgresql
 
 ### ***config.yaml*** 준비
 
-***config/config.yaml***을  ***src/*** 디렉토리에 복사하고 필요 시 일부 모듈을 수정합니다.
+***config/config.yaml***을  ***src/*** 디렉토리에 복사합니다.
+
+
+
+---
+
+
+> ## ℹ️ 이후에 작업들은 모두 **src** 디렉토리에서 수행합니다.
+
+
+
+### localdb 실행
+
+- 스케줄러는 postgres 데이터베이스를 필요합니다.
+- 테스트용으로 준비된 postgres 데이터베이스를 시작하려면 다음 명령어를 수행합니다.
+  ```bash
+  ./start-localdb.sh
+  ```
+- 준비된 테스트용 데이터베이스틀 실행할 경우 config.yaml을 별도로 준비할 필요가 없습니다. 만약 다른 postgres 데이터베이스에 연결할 경우, 스케줄러가 사용할 테이블을 미리 생성하고, 그에 맞는 연결 정보를 기반으로 config.yaml을 수정합니다.
 
 
 ### API 서버 실행
 
+데이터베이스 준비를 확인한 이후에 다음 명령어를 통해서 서버를 실행합니다.
+
 ```bash
-cd src
 python3 main.py
 ```
 
