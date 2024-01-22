@@ -14,6 +14,7 @@ class PGScheduleQueue(ScheduleQueue):
 
     def __init__(self, db_config):
         self.initialized: bool = False
+        self.connected: bool = False
         try:
             self.dbconn = None
             while self.dbconn is None:
@@ -28,6 +29,9 @@ class PGScheduleQueue(ScheduleQueue):
                 except pg2.OperationalError:
                     print("Unable to connect. Retrying...")
                     time.sleep(5)
+
+            self.connected = True
+            self.db_config = db_config.copy()
 
             # CREATE IF EXISTS
             """
@@ -63,12 +67,35 @@ class PGScheduleQueue(ScheduleQueue):
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
+            self.dbconn.rollback()
             raise ex
 
         self.initialized = True
 
     def close(self):
         self.dbconn.close()
+
+    def check_connection(self):
+        return True if self.dbconn and (self.dbconn.closed == 0) else False
+
+    def check_and_reconnect(self):
+        while not self.check_connection():
+            try:
+                self.dbconn = pg2.connect(
+                    user=self.db_config.get("id", "postgres"),
+                    password=self.db_config.get("pw", "abcd1234"),
+                    host=self.db_config.get("host", "localhost"),
+                    port=self.db_config.get("port", 5432),
+                    database=self.db_config.get("db", "scheduler"),
+                )
+            except pg2.OperationalError:
+                self.dbconn and self.dbconn.close()
+                self.dbconn = None
+
+                print("Unable to connect. Retrying...")
+                time.sleep(5)
+
+        self.connected = True
 
     # TODO: convert the wrapout code
     def check_database_initialized(self):
@@ -102,12 +129,16 @@ class PGScheduleQueue(ScheduleQueue):
 
         print("put next_schedule: ", next_schedule)
 
-        with self.dbconn.cursor() as cursor:
-            cursor.execute(
-                sql_put,
-                (id, name, next_schedule, str(datetime.utcnow()), payload_str),
-            )
-        self.dbconn.commit()
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(
+                    sql_put,
+                    (id, name, next_schedule, str(datetime.utcnow()), payload_str),
+                )
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            self.dbconn.rollback()
 
     def delete_with_id(self, id):
         self.check_database_initialized()
@@ -120,11 +151,14 @@ class PGScheduleQueue(ScheduleQueue):
         
         """
 
-        with self.dbconn.cursor() as cursor:
-            cursor.execute(sql_delete, (id,))
-            fetch_results = cursor.fetchall()
-
-        self.dbconn.commit()
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_delete, (id,))
+                fetch_results = cursor.fetchall()
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            self.dbconn.rollback()
 
         assert len(fetch_results) <= 1
 
@@ -300,6 +334,7 @@ class PGScheduleQueue(ScheduleQueue):
         except Exception as ex:
             print(ex, file=sys.stderr)
             pop_results = []
+            self.check_connection()
 
         return [
             self._generate_schedule_dict(pop_result[0], pop_result[3])
@@ -332,6 +367,7 @@ class PGScheduleQueue(ScheduleQueue):
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
+            self.dbconn.rollback()
 
     def initialize(self) -> None:
         """
@@ -365,6 +401,7 @@ class PGScheduleQueue(ScheduleQueue):
                     fetched_payload_dict = json.loads(fetched_payload)
                     if fetched_payload_dict["type"] in ["delay_recur", "cron"]:
                         cursor.execute(sql_update, (fetched_id,))
-                self.dbconn.commit()
+            self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
+            self.dbconn.rollback()

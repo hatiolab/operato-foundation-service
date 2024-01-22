@@ -63,6 +63,8 @@ class Scheduler:
 
         scheduler = cls()
         while not scheduler.finalized:
+            scheduler.schedule_queue.check_and_reconnect()
+
             # 1. pop the schedule with the lowest next_schedule value
             schedules = list()
             for _ in range(scheduler.fetch_count):
