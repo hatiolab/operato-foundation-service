@@ -8,6 +8,7 @@ service_queue
 */src/*_test.py
 !*/src/test/*_test.py
 scheduler-service/local-test-db/postgres_data
+locking-service/local-test-db/postgres_data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

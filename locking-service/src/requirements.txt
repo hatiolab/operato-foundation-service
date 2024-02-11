@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+httpx
+psycopg2
+# asyncpg
+dataclasses-json
+email-validator
+pyjwt
+pytz

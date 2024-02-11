@@ -1,0 +1,14 @@
+---
+database:
+  host: 127.0.0.1
+  port: 55432
+  id: postgres
+  pw: abcd1234
+  db: postgres
+
+locking:
+  debug: false
+  table: locking_queue
+
+
+

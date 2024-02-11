@@ -1,0 +1,14 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:13.2
+    container_name: locking-queue-db
+    environment:
+      POSTGRES_DB: locking_service
+      POSTGRES_PASSWORD: abcd1234
+      POSTGRES_USER: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data/pgdata
+    ports:
+      - "55432:5432"
