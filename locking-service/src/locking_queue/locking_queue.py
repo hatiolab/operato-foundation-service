@@ -1,8 +1,11 @@
+import select
 import sys
 import time
 import json
+import asyncio
 
 import psycopg2 as pg2
+import psycopg2.extensions
 from datetime import datetime
 
 from config import Config
@@ -28,6 +31,10 @@ class LockingQueue:
                 except pg2.OperationalError:
                     print("Unable to connect. Retrying...")
                     time.sleep(5)
+
+            self.dbconn.set_isolation_level(
+                psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT
+            )
 
             self.connected = True
             self.db_config = db_config.copy()
@@ -123,7 +130,6 @@ class LockingQueue:
         except Exception as ex:
             print(ex, file=sys.stderr)
             self.dbconn.rollback()
-            raise ex
 
     def delete_with_id(self, id):
         self.check_database_initialized()
@@ -217,3 +223,46 @@ class LockingQueue:
 
         # TODO: check if fetch_results is available or not
         return fetch_results
+
+    def listen_trigger(self, timeout=None):
+        # 알림 수신 대기
+        try:
+            cur = self.dbconn.cursor()
+            cur.execute("LISTEN my_channel;")
+            print("Waiting for notifications on channel 'my_channel'")
+
+            if select.select([self.dbconn], [], [], timeout) == ([], [], []):
+                print("Timeout")
+            else:
+                self.dbconn.poll()
+                while self.dbconn.notifies:
+                    notify = self.dbconn.notifies.pop(0)
+                    print("Got NOTIFY:", notify.pid, notify.channel, notify.payload)
+
+            print("Done")
+
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            fetch_results = None
+
+    async def listen_trigger_async(self, timeout=None):
+        # 알림 수신 대기
+        try:
+            cur = self.dbconn.cursor()
+            cur.execute("LISTEN my_channel;")
+            print("Waiting for notifications on channel 'my_channel'")
+
+            notified = False
+            while not notified:
+                await asyncio.get_running_loop().run_in_executor(None, self.dbconn.poll)
+                while self.dbconn.notifies:
+                    notify = self.dbconn.notifies.pop(0)
+                    print("Got NOTIFY:", notify.pid, notify.channel, notify.payload)
+                    notified = True
+                await asyncio.sleep(1)
+
+            print("Done")
+
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            fetch_results = None

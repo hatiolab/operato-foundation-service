@@ -21,6 +21,12 @@ def restapi_register(inputs: Locking):
     return locking_manager.register(inputs)
 
 
+async def restapi_call(inputs: Locking):
+    log_info(f"request call: {inputs.model_dump()}")
+    locking_manager = LockingManager()
+    return await locking_manager.call(inputs)
+
+
 def restapi_delete_with_id(
     locking_id: str,
 ):

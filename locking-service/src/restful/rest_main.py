@@ -3,6 +3,7 @@ from typing import Optional
 
 from restful.rest_method import (
     restapi_register,
+    restapi_call,
     restapi_delete_with_id,
     restapi_delete_with_name,
     restapi_get_with_id,
@@ -10,7 +11,6 @@ from restful.rest_method import (
 )
 
 from restful.rest_type import Locking, LockingRequestResult, LockingResultCount
-from locking.locking_manager import LockingManager
 
 
 fast_api = FastAPI(
@@ -24,26 +24,24 @@ fast_api = FastAPI(
 )
 
 
-# @fast_api.on_event("startup")
-# async def startup_event():
-#     pass
-
-
-# @fast_api.on_event("shutdown")
-# async def shutdown_event():
-#     Scheduler.finalize()
-
-
 @fast_api.post("/locking")
-async def register_schedule(inputs: Locking) -> LockingRequestResult:
+async def register_locking(inputs: Locking) -> LockingRequestResult:
     """
     register a schedule event
     """
     return restapi_register(inputs)
 
 
+@fast_api.post("/locking/call")
+async def call_locking(inputs: Locking) -> LockingRequestResult:
+    """
+    register a schedule event
+    """
+    return await restapi_call(inputs)
+
+
 @fast_api.delete("/lockings/{id}")
-async def delete_schedule(id: str) -> LockingResultCount:
+async def delete_lockings(id: str) -> LockingResultCount:
     """
     delete a locking event with id
     """
@@ -51,7 +49,7 @@ async def delete_schedule(id: str) -> LockingResultCount:
 
 
 @fast_api.delete("/lockings")
-async def delete_schedule(name: str = "") -> LockingResultCount:
+async def delete_lockings(name: str = "") -> LockingResultCount:
     """
     delete a locking event with name
     """
@@ -59,7 +57,7 @@ async def delete_schedule(name: str = "") -> LockingResultCount:
 
 
 @fast_api.get("/lockings")
-async def get_schedules(name: str) -> list:
+async def get_lockings(name: str) -> list:
     """
     get a locking event with name
     """
@@ -67,7 +65,7 @@ async def get_schedules(name: str) -> list:
 
 
 @fast_api.get("/lockings/{id}")
-async def get_schedules_with_resp_id(id: str) -> list:
+async def get_lockings_with_resp_id(id: str) -> list:
     """
     get a locking event with id
     """

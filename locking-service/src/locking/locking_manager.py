@@ -71,6 +71,15 @@ class LockingManager:
 
         return locking
 
+    async def call(self, locking: Locking):
+        wait_unitl = locking.wait_until
+
+        await self.locking_queue.listen_trigger_async()
+
+        locking.status = "Released"
+
+        return locking
+
     def delete_with_id(
         self,
         schedule_id: str,
