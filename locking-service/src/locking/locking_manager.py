@@ -3,7 +3,7 @@ from fastapi import HTTPException
 
 from restful.rest_type import Locking, LockingRegisterInput, LockingId
 from config import Config
-from locking_queue.locking_queue import LockingQueue
+from locking.locking_queue import LockingQueue
 
 import sys
 from helper.logger import Logger
