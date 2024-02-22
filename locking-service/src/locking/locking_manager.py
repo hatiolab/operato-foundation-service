@@ -1,13 +1,7 @@
-import asyncio
 import uuid
-from datetime import datetime, timezone
 from fastapi import HTTPException
-import threading
 
-from datetime import datetime
-from time import sleep, time
-
-from restful.rest_type import Locking
+from restful.rest_type import Locking, LockingRegisterInput, LockingId
 from config import Config
 from locking_queue.locking_queue import LockingQueue
 
@@ -46,7 +40,13 @@ class LockingManager:
             except Exception as ex:
                 raise ex
 
-    def register(self, locking: Locking):
+    def register(self, locking_register_input: LockingRegisterInput) -> Locking:
+        locking = Locking(
+            name=locking_register_input.name,
+            wait_until=locking_register_input.wait_until,
+            status="READY",
+            id="",
+        )
         try:
             if locking is None:
                 raise HTTPException(
@@ -59,11 +59,8 @@ class LockingManager:
                 )
 
             locking.status = "READY"
-            locking.wait_until
-            locking.id = str(uuid.uuid4())
-
-            self.locking_queue.insert(
-                locking.id, locking.name, locking.status, locking.wait_until
+            locking.id = self.locking_queue.insert(
+                locking.name, locking.status, locking.wait_until
             )
 
         except Exception as ex:
@@ -71,13 +68,45 @@ class LockingManager:
 
         return locking
 
-    async def call(self, locking: Locking):
+    async def call(self, locking_id: LockingId) -> Locking:
+        get_result = self.locking_queue.get_with_id(locking_id.id)
+
+        if len(get_result) == 0:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        locking = Locking(
+            name=get_result[0][1],
+            wait_until=str(get_result[0][3]),
+            status=get_result[0][2],
+            id=get_result[0][0],
+        )
+
         wait_unitl = locking.wait_until
 
-        await self.locking_queue.listen_trigger_async()
+        self.locking_queue.update(locking.name, "LOCKED", int(locking.wait_until))
 
-        locking.status = "Released"
+        notified = await self.locking_queue.wait_for_status_released(
+            locking.name, int(wait_unitl)
+        )
 
+        locking.status = "RELEASED" if notified else "FAILED"
+
+        return locking
+
+    def release(self, locking_id: LockingId) -> Locking:
+        get_result = self.locking_queue.get_with_id(locking_id.id)
+
+        if len(get_result) == 0:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        locking = Locking(
+            name=get_result[0][1],
+            wait_until=str(get_result[0][3]),
+            status=get_result[0][2],
+            id=get_result[0][0],
+        )
+
+        self.locking_queue.update(locking.name, "RELEASED", locking.wait_until)
         return locking
 
     def delete_with_id(
@@ -124,30 +153,53 @@ class LockingManager:
     def get_with_id(
         self,
         locking_id: str,
-    ):
-        try:
-            found_schedule = self.locking_queue.get_with_id(locking_id)
+    ) -> Locking:
+        locking = Locking(
+            name="",
+            wait_until="",
+            status="READY",
+            id=locking_id,
+        )
 
-            if len(found_schedule) == 0:
+        try:
+            found_lockings = self.locking_queue.get_with_id(locking_id)
+
+            if len(found_lockings) == 0:
                 raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
             log_error(f"Exception: {ex}")
             raise ex
 
-        return found_schedule
+        assert len(found_lockings) == 1
 
-    def get_with_name(self, name: str):
-        found_schedules = list()
+        locking.name = found_lockings[0][1]
+        locking.wait_until = found_lockings[0][3]
+        locking.status = found_lockings[0][2]
+
+        return locking
+
+    def get_with_name(self, name: str) -> list[Locking]:
+        founds = list()
 
         try:
-            found_schedules = self.locking_queue.get_with_name(name)
+            founds = self.locking_queue.get_with_name(name)
 
-            if len(found_schedules) == 0:
+            if len(founds) == 0:
                 raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
             log_error(f"Exception: {ex}")
             raise ex
 
-        return found_schedules
+        lockings = list()
+        for found in founds:
+            locking = Locking(
+                name=found[1],
+                wait_until=str(found[3]),
+                status=found[2],
+                id=found[0],
+            )
+            lockings.append(locking)
+
+        return lockings

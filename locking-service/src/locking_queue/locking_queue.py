@@ -1,8 +1,8 @@
 import select
 import sys
 import time
-import json
 import asyncio
+import uuid
 
 import psycopg2 as pg2
 import psycopg2.extensions
@@ -60,8 +60,42 @@ class LockingQueue:
                             wait_until INT NOT NULL,
                             created_at TIMESTAMP NOT NULL
                         );
+
+                        CREATE OR REPLACE FUNCTION notify_locking()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                            NOTIFY locking_channel, 'locking_event_occurred';
+                            RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql;
+
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'locking_trigger') THEN
+                                EXECUTE 'CREATE TRIGGER locking_trigger
+                                        AFTER UPDATE ON locking_queue
+                                        FOR EACH ROW EXECUTE FUNCTION notify_locking();';
+                            END IF;
+                        END$$;
                     """
                 )
+
+            # with self.dbconn.cursor() as cursor:
+            #     cursor.execute(
+            #         f"""
+            #             CREATE OR REPLACE FUNCTION notify_locking()
+            #             RETURNS TRIGGER AS $$
+            #             BEGIN
+            #                 NOTIFY locking_channel, 'locking_event_occurred';
+            #                 RETURN NEW;
+            #             END;
+            #             $$ LANGUAGE plpgsql;
+
+            #             CREATE OR REPLACE TRIGGER locking_trigger
+            #             AFTER INSERT OR UPDATE OR DELETE ON locking_queue
+            #             FOR EACH ROW EXECUTE FUNCTION notify_locking();
+            #         """
+            #     )
 
             self.dbconn.commit()
         except Exception as ex:
@@ -100,7 +134,7 @@ class LockingQueue:
         if not self.initialized:
             raise Exception("Database is not initialized.")
 
-    def insert(self, id, name, status, wait_until):
+    def insert(self, name, status, wait_until):
         self.check_database_initialized()
 
         # TODO: need to configure this table name
@@ -118,14 +152,32 @@ class LockingQueue:
         #     DO UPDATE SET (status, wait_until) = (EXCLUDED.status, EXCLUDED.wait_until);
         # """
 
-        print(f"insert: {id}, {name}, {status}, {wait_until}")
+        new_id = str(uuid.uuid4())
+        print(f"insert: {new_id}, {name}, {status}, {wait_until}")
 
         try:
             with self.dbconn.cursor() as cursor:
                 cursor.execute(
                     sql_insert,
-                    (id, name, status, wait_until, str(datetime.utcnow())),
+                    (new_id, name, status, wait_until, str(datetime.utcnow())),
                 )
+            self.dbconn.commit()
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+            self.dbconn.rollback()
+
+        return new_id
+
+    def update(self, name, status, wait_until=10):
+        self.check_database_initialized()
+
+        sql_update = f"""
+        UPDATE {LockingQueue.LOCKINGQUEUE_TABLE} SET status = %s, wait_until = %s WHERE name = %s
+        """
+
+        try:
+            with self.dbconn.cursor() as cursor:
+                cursor.execute(sql_update, (status, wait_until, name))
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
@@ -180,7 +232,7 @@ class LockingQueue:
         # TODO: check if fetch_results is available or not
         return fetch_results
 
-    def get_with_id(self, id):
+    def get_with_id(self, id) -> list:
         self.check_database_initialized()
 
         # TODO: need to configure this table name
@@ -202,20 +254,30 @@ class LockingQueue:
         # TODO: check if fetch_results is available or not
         return fetch_results
 
-    def get_with_name(self, name: str):
+    def get_with_name(self, name: str) -> list:
         self.check_database_initialized()
 
         # TODO: need to configure this table name
         table_name = LockingQueue.LOCKINGQUEUE_TABLE
 
-        sql_get = f"""
+        sql_get = (
+            f"""
         SELECT id, name, status, wait_until from {table_name} WHERE name = %s
         
         """
+            if name
+            else f""" 
+        SELECT id, name, status, wait_until from {table_name}
+
+        """
+        )
 
         try:
             with self.dbconn.cursor() as cursor:
-                cursor.execute(sql_get, (name,))
+                if name:
+                    cursor.execute(sql_get, (name,))
+                else:
+                    cursor.execute(sql_get)
                 fetch_results = cursor.fetchall()
         except Exception as ex:
             print(ex, file=sys.stderr)
@@ -245,24 +307,64 @@ class LockingQueue:
             print(ex, file=sys.stderr)
             fetch_results = None
 
-    async def listen_trigger_async(self, timeout=None):
-        # 알림 수신 대기
+    def is_released(self, name):
+        self.check_database_initialized()
+
+        if not name:
+            return False
+
+        lockings = self.get_with_name(name)
+        if lockings:
+            return lockings[0][2] == "RELEASED"
+
+    # TODO: check if this locknig function is available or not later
+    async def listen_triggers_async(self, name, sleep_interval=10):
+        """
+        wait for the database notification for the status update
+        this nofication avoid the repetitive database access
+        """
+
         try:
             cur = self.dbconn.cursor()
-            cur.execute("LISTEN my_channel;")
-            print("Waiting for notifications on channel 'my_channel'")
+            cur.execute("LISTEN locking_channel;")
+            print("Waiting for notifications on channel 'locking_channel'")
 
             notified = False
             while not notified:
+                # call dbconn.poll() to receive the notification
                 await asyncio.get_running_loop().run_in_executor(None, self.dbconn.poll)
+                # check if the notification is available
                 while self.dbconn.notifies:
                     notify = self.dbconn.notifies.pop(0)
                     print("Got NOTIFY:", notify.pid, notify.channel, notify.payload)
-                    notified = True
-                await asyncio.sleep(1)
 
+                    if self.is_released(name):
+                        notified = True
+                        break
+                #
+                await asyncio.sleep(sleep_interval)
             print("Done")
 
         except Exception as ex:
             print(ex, file=sys.stderr)
-            fetch_results = None
+
+    async def wait_for_status_released(self, name, wait_until=10):
+        sleep_interval = 3
+        try:
+            notified = False
+            start_time = time.time()
+            while not notified:
+                if self.is_released(name):
+                    notified = True
+                    break
+
+                current_time = time.time()
+                if current_time - start_time > wait_until:
+                    break
+
+                await asyncio.sleep(sleep_interval)
+            print("Done")
+        except Exception as ex:
+            print(ex, file=sys.stderr)
+
+        return notified
