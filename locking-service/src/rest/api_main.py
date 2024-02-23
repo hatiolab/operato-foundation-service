@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from typing import Optional
 
-from restful.rest_method import (
+from rest.api_impl import (
     restapi_register,
     restapi_call,
     restapi_release,
@@ -11,7 +11,7 @@ from restful.rest_method import (
     restapi_get_with_name,
 )
 
-from restful.rest_type import (
+from rest.api_type import (
     Locking,
     LockingId,
     LockingRegisterInput,

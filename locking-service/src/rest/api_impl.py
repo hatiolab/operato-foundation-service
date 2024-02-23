@@ -1,6 +1,6 @@
 import traceback
 
-from restful.rest_type import (
+from rest.api_type import (
     Locking,
     LockingRegisterInput,
     LockingRequestResult,
@@ -12,7 +12,7 @@ import sys
 from helper.logger import Logger
 
 
-log_message = Logger.get("apimtd", Logger.Level.INFO, sys.stdout)
+log_message = Logger.get("rest", Logger.Level.INFO, sys.stdout)
 
 log_debug = log_message.debug
 log_info = log_message.info

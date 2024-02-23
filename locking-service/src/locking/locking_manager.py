@@ -1,7 +1,7 @@
 import uuid
 from fastapi import HTTPException
 
-from restful.rest_type import Locking, LockingRegisterInput, LockingId
+from rest.api_type import Locking, LockingRegisterInput, LockingId
 from config import Config
 from locking.locking_queue import LockingQueue
 
@@ -9,7 +9,7 @@ import sys
 from helper.logger import Logger
 
 log_message = Logger.get(
-    "scheduler",
+    "locking",
     Logger.Level.DEBUG if Config.locking_debug() else Logger.Level.INFO,
     sys.stdout,
 )
