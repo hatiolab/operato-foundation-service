@@ -25,31 +25,27 @@ def restapi_register(inputs: LockingRegisterInput) -> LockingRequestResult:
     locking_manager = LockingManager()
     result = locking_manager.register(inputs)
     return {
-        "name": result.name,
         "id": result.id,
         "status": result.status,
     }
 
 
-async def restapi_call(inputs: LockingId) -> LockingRequestResult:
+async def restapi_try_locking(inputs: LockingId) -> LockingRequestResult:
     log_info(f"request call: {inputs.model_dump()}")
     locking_manager = LockingManager()
-    result = await locking_manager.call(inputs)
+    result = await locking_manager.try_locking(inputs)
     return {
-        "name": result.name,
         "id": result.id,
         "status": result.status,
     }
 
 
-def restapi_release(inputs: LockingId) -> LockingRequestResult:
+def restapi_release_locking(inputs: LockingId) -> LockingRequestResult:
     log_info(f"request release: {inputs.model_dump()}")
     locking_manager = LockingManager()
-    result = locking_manager.release(inputs)
+    result = locking_manager.release_lock(inputs)
     return {
-        "name": result.name,
         "id": result.id,
-        "status": result.status,
     }
 
 
@@ -61,19 +57,13 @@ def restapi_delete_with_id(
     return locking_manager.delete_with_id(locking_id)
 
 
-def restapi_delete_with_name(name: str = ""):
-    log_info(f"request delete(client): {name}")
-    locking_manager = LockingManager()
-    return locking_manager.delete_with_name(name)
-
-
 def restapi_get_with_id(req_id: str) -> Locking:
     log_info(f"request get a locking - Req. ID({req_id})")
     locking_manager = LockingManager()
     return locking_manager.get_with_id(req_id)
 
 
-def restapi_get_with_name(name: str = "") -> list[Locking]:
-    log_info(f"request get_with_name - name({name})")
+def restapi_get_lockings() -> list[Locking]:
+    log_info(f"request get all lockings")
     locking_manager = LockingManager()
-    return locking_manager.get_with_name(name)
+    return locking_manager.get_lockings()

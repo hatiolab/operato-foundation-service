@@ -17,16 +17,14 @@ class LockingStatus(str, Enum):
 
 
 class Locking(BaseModel):
-    name: str = Field(default="", title="Locking event name")
-    wait_until: Optional[str] = Field(default="10", title="wait until")
+    id: Optional[str] = Field(default="", title="Locking id")
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"
     )
-    id: Optional[str] = Field(default="", title="Locking id")
+    wait_until: Optional[str] = Field(default="10", title="wait until")
 
 
 class LockingRegisterInput(BaseModel):
-    name: str = Field(default="", title="Locking event name")
     wait_until: Optional[str] = Field(default="10", title="wait until")
 
 
@@ -35,7 +33,6 @@ class LockingId(BaseModel):
 
 
 class LockingRequestResult(BaseModel):
-    name: str = Field(default="", title="Locking event name")
     id: str = Field(default="", title="Locking id")
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"

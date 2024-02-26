@@ -3,12 +3,11 @@ from typing import Optional
 
 from rest.api_impl import (
     restapi_register,
-    restapi_call,
-    restapi_release,
+    restapi_try_locking,
+    restapi_release_locking,
     restapi_delete_with_id,
-    restapi_delete_with_name,
     restapi_get_with_id,
-    restapi_get_with_name,
+    restapi_get_lockings,
 )
 
 from rest.api_type import (
@@ -39,20 +38,20 @@ async def register_locking(inputs: LockingRegisterInput) -> LockingRequestResult
     return restapi_register(inputs)
 
 
-@fast_api.post("/locking/call")
-async def call_locking(inputs: LockingId) -> LockingRequestResult:
+@fast_api.post("/locking/try")
+async def try_locking(inputs: LockingId) -> LockingRequestResult:
     """
     register a schedule event
     """
-    return await restapi_call(inputs)
+    return await restapi_try_locking(inputs)
 
 
 @fast_api.post("/locking/release")
-async def release_locking(inputs: LockingId) -> LockingRequestResult:
+async def release_locking(inputs: LockingId) -> LockingId:
     """
     register a schedule event
     """
-    return restapi_release(inputs)
+    return restapi_release_locking(inputs)
 
 
 @fast_api.delete("/lockings/{id}")
@@ -63,25 +62,17 @@ async def delete_lockings(id: str) -> LockingResultCount:
     return restapi_delete_with_id(id)
 
 
-@fast_api.delete("/lockings")
-async def delete_lockings(name: str = "") -> LockingResultCount:
-    """
-    delete a locking event with name
-    """
-    return restapi_delete_with_name(name)
-
-
-@fast_api.get("/lockings")
-async def get_lockings(name: str) -> list[Locking]:
-    """
-    get a locking event with name
-    """
-    return restapi_get_with_name(name)
-
-
 @fast_api.get("/lockings/{id}")
 async def get_lockings_with_resp_id(id: str) -> Locking:
     """
     get a locking event with id
     """
     return restapi_get_with_id(id)
+
+
+@fast_api.get("/lockings")
+async def get_lockings() -> list[Locking]:
+    """
+    get a locking event with id
+    """
+    return restapi_get_lockings()
