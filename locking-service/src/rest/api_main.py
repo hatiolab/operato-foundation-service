@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from typing import Optional
 
 from rest.api_impl import (
-    restapi_register,
+    restapi_request_locking,
     restapi_try_locking,
     restapi_release_locking,
     restapi_delete_with_id,
@@ -30,11 +30,11 @@ fast_api = FastAPI(
 
 
 @fast_api.post("/locking")
-async def register_locking() -> LockingRequestResult:
+async def request_locking() -> LockingRequestResult:
     """
     register a schedule eventㅋ
     """
-    return restapi_register()
+    return restapi_request_locking()
 
 
 @fast_api.post("/locking/try")

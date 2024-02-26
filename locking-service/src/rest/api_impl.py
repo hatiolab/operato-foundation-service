@@ -19,7 +19,7 @@ log_warning = log_message.warning
 log_error = log_message.error
 
 
-def restapi_register() -> LockingRequestResult:
+def restapi_request_locking() -> LockingRequestResult:
     log_info(f"request registration")
     locking_manager = LockingManager()
     result = locking_manager.register()
