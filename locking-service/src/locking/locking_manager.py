@@ -1,7 +1,7 @@
 import uuid
 from fastapi import HTTPException
 
-from rest.api_type import Locking, LockingRegisterInput, LockingId
+from rest.api_type import Locking, LockingInput
 from config import Config
 from locking.locking_queue import LockingQueue
 
@@ -40,12 +40,8 @@ class LockingManager:
             except Exception as ex:
                 raise ex
 
-    def register(self, locking_register_input: LockingRegisterInput) -> Locking:
-        locking = Locking(
-            wait_until=locking_register_input.wait_until,
-            status="READY",
-            id="",
-        )
+    def register(self) -> Locking:
+        locking = Locking()
         try:
             if locking is None:
                 raise HTTPException(
@@ -53,50 +49,45 @@ class LockingManager:
                 )
 
             locking.status = "READY"
-            locking.id = self.locking_queue.insert(locking.status, locking.wait_until)
+            locking.id = self.locking_queue.insert(locking.status)
 
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"Error: {ex}")
 
         return locking
 
-    async def try_locking(self, locking_id: LockingId) -> Locking:
+    async def try_locking(self, locking_id: LockingInput) -> Locking:
         get_result = self.locking_queue.get_with_id(locking_id.id)
 
         if len(get_result) == 0:
             raise HTTPException(status_code=404, detail="Item not found")
 
         locking = Locking(
-            wait_until=str(get_result[0][2]),
             status=get_result[0][1],
             id=get_result[0][0],
         )
 
-        wait_unitl = locking.wait_until
+        self.locking_queue.update(locking.id, "LOCKED")
 
-        self.locking_queue.update(locking.id, "LOCKED", int(locking.wait_until))
-
-        notified = await self.locking_queue.wait_for_status_released(
-            locking.id, int(wait_unitl)
-        )
+        notified = await self.locking_queue.wait_for_status_released(locking.id)
 
         locking.status = "RELEASED" if notified else "FAILED"
 
         return locking
 
-    def release_lock(self, locking_id: LockingId) -> Locking:
-        get_result = self.locking_queue.get_with_id(locking_id.id)
+    def release_locking(self, locking_request: LockingInput) -> Locking:
+        get_result = self.locking_queue.get_with_id(locking_request.id)
 
         if len(get_result) == 0:
             raise HTTPException(status_code=404, detail="Item not found")
 
         locking = Locking(
-            wait_until=str(get_result[0][2]),
-            status=get_result[0][1],
+            status="RELEASED",
             id=get_result[0][0],
+            payload=locking_request.payload,
         )
 
-        self.locking_queue.update(locking.id, "RELEASED", locking.wait_until)
+        self.locking_queue.update(locking.id, "RELEASED", locking_request.payload)
         return locking
 
     def delete_with_id(
@@ -126,7 +117,6 @@ class LockingManager:
         locking_id: str,
     ) -> Locking:
         locking = Locking(
-            wait_until="",
             status="READY",
             id=locking_id,
         )
@@ -143,7 +133,6 @@ class LockingManager:
 
         assert len(found_lockings) == 1
 
-        locking.wait_until = found_lockings[0][2]
         locking.status = found_lockings[0][1]
 
         return locking
@@ -164,7 +153,6 @@ class LockingManager:
         locking_list: list[Locking] = []
         for found_locking in found_lockings:
             locking = Locking(
-                wait_until=str(found_locking[2]),
                 status=found_locking[1],
                 id=found_locking[0],
             )

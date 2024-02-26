@@ -44,8 +44,8 @@ class LockingQueue:
             CREATE TABLE locking_queue (  
                 id UUID NOT NULL PRIMARY KEY,
                 status VARCHAR(255) NOT NULL,
-                wait_until INT NOT NULL,
-                created_at TIMESTAMP NOT NULL,
+                payload TEXT,
+                created_at TIMESTAMP NOT NULL
             );
             """
 
@@ -55,7 +55,7 @@ class LockingQueue:
                         CREATE TABLE IF NOT EXISTS {LockingQueue.LOCKINGQUEUE_TABLE} (
                             id UUID NOT NULL PRIMARY KEY,
                             status VARCHAR(255) NOT NULL,
-                            wait_until INT NOT NULL,
+                            payload TEXT,
                             created_at TIMESTAMP NOT NULL
                         );
 
@@ -132,15 +132,15 @@ class LockingQueue:
         if not self.initialized:
             raise Exception("Database is not initialized.")
 
-    def insert(self, status, wait_until):
+    def insert(self, status):
         self.check_database_initialized()
 
         # TODO: need to configure this table name
         table_name = LockingQueue.LOCKINGQUEUE_TABLE
 
         sql_insert = f"""
-        INSERT INTO {table_name} (id, status, wait_until, created_at)
-            VALUES (%s, %s, %s, %s)
+        INSERT INTO {table_name} (id, status, created_at)
+            VALUES (%s, %s, %s)
         """
 
         # sql_insert = f"""
@@ -151,13 +151,13 @@ class LockingQueue:
         # """
 
         new_id = str(uuid.uuid4())
-        print(f"insert: {new_id}, {status}, {wait_until}")
+        print(f"insert: {new_id}, {status}")
 
         try:
             with self.dbconn.cursor() as cursor:
                 cursor.execute(
                     sql_insert,
-                    (new_id, status, wait_until, str(datetime.utcnow())),
+                    (new_id, status, str(datetime.utcnow())),
                 )
             self.dbconn.commit()
         except Exception as ex:
@@ -166,16 +166,16 @@ class LockingQueue:
 
         return new_id
 
-    def update(self, locking_id, status, wait_until=10):
+    def update(self, locking_id, status, payload=None):
         self.check_database_initialized()
 
         sql_update = f"""
-        UPDATE {LockingQueue.LOCKINGQUEUE_TABLE} SET status = %s, wait_until = %s WHERE id = %s
+        UPDATE {LockingQueue.LOCKINGQUEUE_TABLE} SET status = %s, payload = %s WHERE id = %s
         """
 
         try:
             with self.dbconn.cursor() as cursor:
-                cursor.execute(sql_update, (status, wait_until, locking_id))
+                cursor.execute(sql_update, (status, payload or "", locking_id))
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
@@ -211,7 +211,7 @@ class LockingQueue:
         table_name = LockingQueue.LOCKINGQUEUE_TABLE
 
         sql_get = f"""
-        SELECT id, status, wait_until from {table_name} WHERE id = %s
+        SELECT id, status, payload from {table_name} WHERE id = %s
         
         """
 
@@ -233,7 +233,7 @@ class LockingQueue:
         table_name = LockingQueue.LOCKINGQUEUE_TABLE
 
         sql_get = f""" 
-        SELECT id, status, wait_until from {table_name}
+        SELECT id, status, payload from {table_name}
 
         """
 
@@ -310,7 +310,7 @@ class LockingQueue:
         except Exception as ex:
             print(ex, file=sys.stderr)
 
-    async def wait_for_status_released(self, id, wait_until=10):
+    async def wait_for_status_released(self, id):
         sleep_interval = 3
         try:
             notified = False
@@ -321,7 +321,9 @@ class LockingQueue:
                     break
 
                 current_time = time.time()
-                if current_time - start_time > wait_until:
+
+                # TODO: 300 seconds is the maximum waiting time
+                if current_time - start_time > 300:
                     break
 
                 await asyncio.sleep(sleep_interval)

@@ -12,8 +12,7 @@ from rest.api_impl import (
 
 from rest.api_type import (
     Locking,
-    LockingId,
-    LockingRegisterInput,
+    LockingInput,
     LockingRequestResult,
     LockingResultCount,
 )
@@ -31,15 +30,15 @@ fast_api = FastAPI(
 
 
 @fast_api.post("/locking")
-async def register_locking(inputs: LockingRegisterInput) -> LockingRequestResult:
+async def register_locking() -> LockingRequestResult:
     """
     register a schedule eventㅋ
     """
-    return restapi_register(inputs)
+    return restapi_register()
 
 
 @fast_api.post("/locking/try")
-async def try_locking(inputs: LockingId) -> LockingRequestResult:
+async def try_locking(inputs: LockingInput) -> LockingRequestResult:
     """
     register a schedule event
     """
@@ -47,9 +46,10 @@ async def try_locking(inputs: LockingId) -> LockingRequestResult:
 
 
 @fast_api.post("/locking/release")
-async def release_locking(inputs: LockingId) -> LockingId:
+async def release_locking(inputs: LockingInput) -> LockingInput:
     """
     register a schedule event
+
     """
     return restapi_release_locking(inputs)
 

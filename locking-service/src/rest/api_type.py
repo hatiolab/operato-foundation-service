@@ -21,15 +21,12 @@ class Locking(BaseModel):
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"
     )
-    wait_until: Optional[str] = Field(default="10", title="wait until")
+    payload: Optional[str] = Field(default="", title="payload")
 
 
-class LockingRegisterInput(BaseModel):
-    wait_until: Optional[str] = Field(default="10", title="wait until")
-
-
-class LockingId(BaseModel):
+class LockingInput(BaseModel):
     id: str = Field(default="", title="Locking id")
+    payload: Optional[str] = Field(default="", title="payload")
 
 
 class LockingRequestResult(BaseModel):
@@ -37,6 +34,7 @@ class LockingRequestResult(BaseModel):
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"
     )
+    payload: Optional[str] = Field(default="", title="payload")
 
 
 class LockingResultCount(BaseModel):

@@ -2,9 +2,8 @@ import traceback
 
 from rest.api_type import (
     Locking,
-    LockingRegisterInput,
     LockingRequestResult,
-    LockingId,
+    LockingInput,
 )
 from locking.locking_manager import LockingManager
 
@@ -20,17 +19,17 @@ log_warning = log_message.warning
 log_error = log_message.error
 
 
-def restapi_register(inputs: LockingRegisterInput) -> LockingRequestResult:
-    log_info(f"request registration: {inputs.model_dump()}")
+def restapi_register() -> LockingRequestResult:
+    log_info(f"request registration")
     locking_manager = LockingManager()
-    result = locking_manager.register(inputs)
+    result = locking_manager.register()
     return {
         "id": result.id,
         "status": result.status,
     }
 
 
-async def restapi_try_locking(inputs: LockingId) -> LockingRequestResult:
+async def restapi_try_locking(inputs: LockingInput) -> LockingRequestResult:
     log_info(f"request call: {inputs.model_dump()}")
     locking_manager = LockingManager()
     result = await locking_manager.try_locking(inputs)
@@ -40,10 +39,10 @@ async def restapi_try_locking(inputs: LockingId) -> LockingRequestResult:
     }
 
 
-def restapi_release_locking(inputs: LockingId) -> LockingRequestResult:
+def restapi_release_locking(inputs: LockingInput) -> LockingRequestResult:
     log_info(f"request release: {inputs.model_dump()}")
     locking_manager = LockingManager()
-    result = locking_manager.release_lock(inputs)
+    result = locking_manager.release_locking(inputs)
     return {
         "id": result.id,
     }
