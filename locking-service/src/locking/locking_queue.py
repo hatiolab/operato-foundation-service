@@ -278,6 +278,8 @@ class LockingQueue:
         lockings = self.get_with_id(id)
         if lockings:
             return lockings[0][1] == "RELEASED"
+        else:
+            return True
 
     # TODO: check if this locknig function is available or not later
     async def listen_triggers_async(self, id, sleep_interval=10):

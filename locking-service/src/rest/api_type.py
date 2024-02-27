@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 from enum import Enum
 
 
@@ -21,12 +21,12 @@ class Locking(BaseModel):
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"
     )
-    payload: Optional[str] = Field(default="", title="payload")
+    payload: Optional[Dict[str, Any]] = Field(default=None, title="payload")
 
 
 class LockingInput(BaseModel):
     id: str = Field(default="", title="Locking id")
-    payload: Optional[str] = Field(default="", title="payload")
+    payload: Optional[Dict[str, Any]] = Field(default=None, title="payload")
 
 
 class LockingRequestResult(BaseModel):
@@ -34,7 +34,7 @@ class LockingRequestResult(BaseModel):
     status: Optional[LockingStatus] = Field(
         default="READY", title="status [READY, LOCKED, RELEASED, FAILED]"
     )
-    payload: Optional[str] = Field(default="", title="payload")
+    payload: Optional[Dict[str, Any]] = Field(default=None, title="payload")
 
 
 class LockingResultCount(BaseModel):
