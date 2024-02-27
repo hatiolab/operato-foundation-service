@@ -62,6 +62,9 @@ class LockingManager:
         if len(get_result) == 0:
             raise HTTPException(status_code=404, detail="Item not found")
 
+        if get_result[0][1] == "LOCKED":
+            raise HTTPException(status_code=409, detail="Item is already locked")
+
         locking = Locking(
             status=get_result[0][1],
             id=get_result[0][0],
@@ -87,20 +90,23 @@ class LockingManager:
             payload=locking_request.payload,
         )
 
-        self.locking_queue.update(locking.id, "RELEASED", locking_request.payload)
+        # TODO: need to make a decision if this locking is deleted or not
+        # self.locking_queue.update(locking.id, "RELEASED", locking_request.payload)
+        self.locking_queue.delete_with_id(locking.id)
+
         return locking
 
     def delete_with_id(
         self,
-        schedule_id: str,
+        locking_id: str,
     ):
         try:
-            if type(schedule_id) is not str or schedule_id == "":
+            if type(locking_id) is not str or locking_id == "":
                 raise HTTPException(
                     status_code=400, detail="Bad Request(No valid input parameters)"
                 )
 
-            deleted_list = self.locking_queue.delete_with_id(schedule_id)
+            deleted_list = self.locking_queue.delete_with_id(locking_id)
 
             found_count = len(deleted_list)
 
