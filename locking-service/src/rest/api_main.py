@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from typing import Optional
 
 from rest.api_impl import (
     restapi_request_locking,

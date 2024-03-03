@@ -1,5 +1,3 @@
-import traceback
-
 from rest.api_type import (
     Locking,
     LockingRequestResult,
