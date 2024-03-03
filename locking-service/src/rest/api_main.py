@@ -13,6 +13,7 @@ from rest.api_impl import (
 from rest.api_type import (
     Locking,
     LockingInput,
+    LockingPayload,
     LockingRequestResult,
     LockingResultCount,
 )
@@ -38,7 +39,7 @@ async def request_locking() -> LockingRequestResult:
 
 
 @fast_api.post("/locking/try")
-async def try_locking(inputs: LockingInput) -> LockingRequestResult:
+async def try_locking(inputs: LockingInput) -> LockingPayload:
     """
     register a schedule event
     """

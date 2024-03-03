@@ -29,6 +29,10 @@ class LockingInput(BaseModel):
     payload: Optional[Dict[str, Any]] = Field(default=None, title="payload")
 
 
+class LockingPayload(BaseModel):
+    payload: Optional[Dict[str, Any]] = Field(default=None, title="payload")
+
+
 class LockingRequestResult(BaseModel):
     id: str = Field(default="", title="Locking id")
     status: Optional[LockingStatus] = Field(

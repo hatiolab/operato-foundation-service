@@ -3,6 +3,7 @@ import traceback
 from rest.api_type import (
     Locking,
     LockingRequestResult,
+    LockingPayload,
     LockingInput,
 )
 from locking.locking_manager import LockingManager
@@ -29,13 +30,12 @@ def restapi_request_locking() -> LockingRequestResult:
     }
 
 
-async def restapi_try_locking(inputs: LockingInput) -> LockingRequestResult:
+async def restapi_try_locking(inputs: LockingInput) -> LockingPayload:
     log_info(f"request call: {inputs.model_dump()}")
     locking_manager = LockingManager()
     result = await locking_manager.try_locking(inputs)
     return {
-        "id": result.id,
-        "status": result.status,
+        "payload": result.payload,
     }
 
 

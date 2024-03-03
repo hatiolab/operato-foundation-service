@@ -1,5 +1,5 @@
-import uuid
 from fastapi import HTTPException
+import json
 
 from rest.api_type import Locking, LockingInput
 from config import Config
@@ -72,9 +72,17 @@ class LockingManager:
 
         self.locking_queue.update(locking.id, "LOCKED")
 
-        notified = await self.locking_queue.wait_for_status_released(locking.id)
+        (notified, payload) = await self.locking_queue.wait_for_status_released(
+            locking.id
+        )
 
         locking.status = "RELEASED" if notified else "FAILED"
+        locking.payload = (
+            json.loads(payload) if isinstance(payload, str) and payload != "" else {}
+        )
+
+        if locking.status == "RELEASED":
+            self.locking_queue.delete_with_id(locking.id)
 
         return locking
 
@@ -91,8 +99,11 @@ class LockingManager:
         )
 
         # TODO: need to make a decision if this locking is deleted or not
-        # self.locking_queue.update(locking.id, "RELEASED", locking_request.payload)
-        self.locking_queue.delete_with_id(locking.id)
+        if get_result[0][1] == "LOCKED":
+            self.locking_queue.update(locking.id, "RELEASED", locking.payload)
+        else:
+            print(f"Locking is not locked but released: {locking.id}")
+            self.locking_queue.delete_with_id(locking.id)
 
         return locking
 

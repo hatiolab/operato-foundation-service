@@ -3,6 +3,7 @@ import sys
 import time
 import asyncio
 import uuid
+import json
 
 import psycopg2 as pg2
 import psycopg2.extensions
@@ -169,13 +170,15 @@ class LockingQueue:
     def update(self, locking_id, status, payload=None):
         self.check_database_initialized()
 
+        payload_str = json.dumps(payload) if type(payload) == dict else payload
+
         sql_update = f"""
         UPDATE {LockingQueue.LOCKINGQUEUE_TABLE} SET status = %s, payload = %s WHERE id = %s
         """
 
         try:
             with self.dbconn.cursor() as cursor:
-                cursor.execute(sql_update, (status, payload or "", locking_id))
+                cursor.execute(sql_update, (status, payload_str or "", locking_id))
             self.dbconn.commit()
         except Exception as ex:
             print(ex, file=sys.stderr)
@@ -221,7 +224,7 @@ class LockingQueue:
                 fetch_results = cursor.fetchall()
         except Exception as ex:
             print(ex, file=sys.stderr)
-            fetch_results = None
+            fetch_results = []
 
         # TODO: check if fetch_results is available or not
         return fetch_results
@@ -277,9 +280,9 @@ class LockingQueue:
 
         lockings = self.get_with_id(id)
         if lockings:
-            return lockings[0][1] == "RELEASED"
+            return (lockings[0][1] == "RELEASED", lockings[0][2])
         else:
-            return True
+            return (True, {})
 
     # TODO: check if this locknig function is available or not later
     async def listen_triggers_async(self, id, sleep_interval=10):
@@ -317,8 +320,11 @@ class LockingQueue:
         try:
             notified = False
             start_time = time.time()
+            payload = None
             while not notified:
-                if self.is_released(id):
+                (is_released, payload) = self.is_released(id)
+
+                if is_released:
                     notified = True
                     break
 
@@ -333,4 +339,4 @@ class LockingQueue:
         except Exception as ex:
             print(ex, file=sys.stderr)
 
-        return notified
+        return (notified, payload)
