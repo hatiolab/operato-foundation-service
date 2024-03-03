@@ -332,10 +332,11 @@ class LockingQueue:
 
                 # TODO: 300 seconds is the maximum waiting time
                 if current_time - start_time > 300:
+                    print("this locking is not released for 300 seconds.")
+                    notified = False
                     break
 
                 await asyncio.sleep(sleep_interval)
-            print("Done")
         except Exception as ex:
             print(ex, file=sys.stderr)
 

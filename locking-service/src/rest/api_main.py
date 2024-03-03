@@ -33,7 +33,7 @@ fast_api = FastAPI(
 @fast_api.post("/locking")
 async def request_locking() -> LockingRequestResult:
     """
-    register a schedule eventㅋ
+    request a locking
     """
     return restapi_request_locking()
 
@@ -41,7 +41,7 @@ async def request_locking() -> LockingRequestResult:
 @fast_api.post("/locking/try")
 async def try_locking(inputs: LockingInput) -> LockingPayload:
     """
-    register a schedule event
+    try to lock with a locking id
     """
     return await restapi_try_locking(inputs)
 
@@ -49,7 +49,7 @@ async def try_locking(inputs: LockingInput) -> LockingPayload:
 @fast_api.post("/locking/release")
 async def release_locking(inputs: LockingInput) -> LockingInput:
     """
-    register a schedule event
+    release a locking with a locking id and payload
 
     """
     return restapi_release_locking(inputs)
@@ -58,7 +58,7 @@ async def release_locking(inputs: LockingInput) -> LockingInput:
 @fast_api.delete("/lockings/{id}")
 async def delete_lockings(id: str) -> LockingResultCount:
     """
-    delete a locking event with id
+    delete a locking with id
     """
     return restapi_delete_with_id(id)
 
@@ -66,7 +66,7 @@ async def delete_lockings(id: str) -> LockingResultCount:
 @fast_api.get("/lockings/{id}")
 async def get_lockings_with_resp_id(id: str) -> Locking:
     """
-    get a locking event with id
+    get a locking with id
     """
     return restapi_get_with_id(id)
 
@@ -74,6 +74,6 @@ async def get_lockings_with_resp_id(id: str) -> Locking:
 @fast_api.get("/lockings")
 async def get_lockings() -> list[Locking]:
     """
-    get a locking event with id
+    get all lockings registered but not released
     """
     return restapi_get_lockings()
