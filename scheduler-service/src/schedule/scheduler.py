@@ -63,23 +63,29 @@ class Scheduler:
 
         scheduler = cls()
         while not scheduler.finalized:
-            scheduler.schedule_queue.check_and_reconnect()
+            try:
+                scheduler.schedule_queue.check_and_reconnect()
 
-            # 1. pop the schedule with the lowest next_schedule value
-            schedules = list()
-            for _ in range(scheduler.fetch_count):
-                current_timestamp = int(time())
-                log_debug(f"POP current_timestamp: {current_timestamp}")
-                schedule = scheduler.schedule_queue.pop(current_timestamp)
-                schedules += schedule
+                # 1. pop the schedule with the lowest next_schedule value
+                schedules = list()
+                for _ in range(scheduler.fetch_count):
+                    current_timestamp = int(time())
+                    log_debug(f"POP current_timestamp: {current_timestamp}")
+                    schedule = scheduler.schedule_queue.pop(current_timestamp)
+                    schedules += schedule
 
-            if len(schedules) > 0:
-                log_info(f"schedules: {schedules}")
-            else:
-                log_debug(f"schedules: {schedules}")
+                if len(schedules) > 0:
+                    log_info(f"schedules: {schedules}")
+                else:
+                    log_debug(f"schedules: {schedules}")
 
-            if len(schedules) > 0:
-                scheduler.start_process_schedules(schedules, async_process_loop)
+                if len(schedules) > 0:
+                    scheduler.start_process_schedules(schedules, async_process_loop)
+            except pg2.OperationalError:
+                cls.dbconn and cls.dbconn.close()
+                cls.dbconn = None
+            except Exception as ex:
+                log_error(f"main loop exception: {ex}")
 
             # TODO: 0.5(500ms) is a part of this application configuration.
             sleep(scheduler.fetch_interval)
