@@ -21,6 +21,12 @@ def restapi_register(schedule: Schedule):
     return scheduler.register(schedule)
 
 
+def restapi_update(schedule_id: str, schedule: Schedule):
+    log_info(f"request update({schedule_id}): {schedule.dict()}")
+    scheduler = Scheduler()
+    return scheduler.update(schedule_id, schedule)
+
+
 def restapi_delete_schedule_with_id(
     schedule_id: str,
 ):

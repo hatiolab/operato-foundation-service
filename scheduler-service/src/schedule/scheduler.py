@@ -9,7 +9,7 @@ from time import sleep, time
 
 from restful.rest_type import Schedule
 from config import Config
-from schedule_queue.pg_schedule_queue import PGScheduleQueue
+from schedule_queue.pg_schedule_queue import PGScheduleQueue, ScheduleNameConflict
 from schedule.schedule_type import ScheduleType, ScheduleTaskStatus
 from task.task_mgr import TaskManager
 from task.task_import import TASK_ACTIVE_MODULE_LIST
@@ -149,45 +149,72 @@ class Scheduler:
             ]
         )
 
+    def prepare_schedule(self, schedule: Schedule):
+        """
+        validate the schedule and work out what is stored for it
+        -> (schedule_event, next_time, unique name, client_info)
+
+        """
+        schedule_event = schedule.dict()
+
+        # 1. calculate next timestamp and delay based on schedule_event
+        tz = schedule_event.get("timezone", "Asia/Seoul")
+        (next_time, _) = ScheduleType.get_next_and_delay(schedule_event, tz)
+
+        # 2. arrnage the task parameters of this schedule
+        new_schedule_task = schedule_event["task"]
+        # 2.1 check if task type is available
+        if not new_schedule_task["type"] in TaskManager.all():
+            raise Exception("task type unavailable.")
+        # 2.2 check if task connection is available
+        input_task_connection = new_schedule_task["connection"]
+        self.is_task_available(new_schedule_task["type"], input_task_connection)
+        # 2.3 update some additional parameters of this task like status, next, etc.
+        new_schedule_task["retry_count"] = 0
+        new_schedule_task["next"] = next_time
+        new_schedule_task["status"] = ScheduleTaskStatus.IDLE
+        new_schedule_task["iteration"] = 0
+
+        client_info = schedule_event.get("client")
+        schedule_unique_name = self.generate_client_unique_name(client_info)
+
+        return (schedule_event, next_time, schedule_unique_name, client_info)
+
+    def schedule_result(self, schedule_event: dict, client_info: dict, schedule_id):
+        return {
+            "name": schedule_event["name"],
+            "client": {
+                "application": client_info["application"],
+                "group": client_info["group"],
+                "type": client_info["type"],
+                "key": client_info["key"],
+                "operation": client_info["operation"],
+            },
+            "id": schedule_id,
+        }
+
     def register(self, schedule: Schedule):
         """
         TODO: 초기 설정 시에 등록된 스케줄을 바로 실행하는 구조가 아니고,
         말 그대로 동작만 하는 경우로서 예외가 없는지 확인이 필요하다.
         """
         try:
-            schedule_event = schedule.dict()
+            (
+                schedule_event,
+                next_time,
+                schedule_unique_name,
+                client_info,
+            ) = self.prepare_schedule(schedule)
 
-            # 1. check if unique key(operation) is duplicated.
-
-            # 2. calculate next timestamp and delay based on schedule_event
-            tz = schedule_event.get("timezone", "Asia/Seoul")
-            (next_time, _) = ScheduleType.get_next_and_delay(schedule_event, tz)
-
-            # 3. arrnage the task parameters of this schedule
-            new_schedule_task = schedule_event["task"]
-            # 3.1 check if task type is available
-            if not new_schedule_task["type"] in TaskManager.all():
-                raise Exception("task type unavailable.")
-            # 3.2 check if task connection is available
-            input_task_connection = new_schedule_task["connection"]
-            self.is_task_available(new_schedule_task["type"], input_task_connection)
-            # 3.3 update some additional parameters of this task like status, next, etc.
-            new_schedule_task["retry_count"] = 0
-            new_schedule_task["next"] = next_time
-            new_schedule_task["status"] = ScheduleTaskStatus.IDLE
-            new_schedule_task["iteration"] = 0
-
-            # 5. store the updated schedule event
-            client_info = schedule_event.get("client")
-            schedule_unique_name = self.generate_client_unique_name(client_info)
+            # store the schedule event
             (id, _, _, _) = self.schedule_queue.get_with_name(
                 schedule_unique_name, True
             )
-            # 5.1 if duplicated, delete the previous one and register new one with the same id
+            # if duplicated, update the previous one with the same id
             if id:
                 schedule_id = id
                 self.schedule_queue.update(id, next_time, schedule_event)
-            # 5.2 if not duplicated, create a new id
+            # if not duplicated, create a new id
             else:
                 schedule_id = str(uuid.uuid4())
                 self.schedule_queue.put(
@@ -196,18 +223,50 @@ class Scheduler:
 
             # self.put_event_to_history_db("register", schedule_event)
 
-            # 7. return the result with the response id
-            return {
-                "name": schedule_event["name"],
-                "client": {
-                    "application": client_info["application"],
-                    "group": client_info["group"],
-                    "type": client_info["type"],
-                    "key": client_info["key"],
-                    "operation": client_info["operation"],
-                },
-                "id": schedule_id,
-            }
+            return self.schedule_result(schedule_event, client_info, schedule_id)
+        except Exception as ex:
+            log_error(f"Exception: {ex}")
+            raise ex
+
+    def update(self, schedule_id: str, schedule: Schedule):
+        """
+        replace the schedule with this id: its payload, its client name and its next run time.
+        the id in the path decides which schedule changes - not the client in the body.
+
+        """
+        try:
+            if type(schedule_id) is not str or schedule_id == "":
+                raise HTTPException(
+                    status_code=400, detail="Bad Request(No valid input parameters)"
+                )
+            try:
+                uuid.UUID(schedule_id)
+            except ValueError:
+                # ids are uuids - anything else (e.g. 'undefined') names no schedule
+                raise HTTPException(status_code=404, detail="Item not found")
+
+            (
+                schedule_event,
+                next_time,
+                schedule_unique_name,
+                client_info,
+            ) = self.prepare_schedule(schedule)
+            schedule_event["id"] = schedule_id
+
+            try:
+                count = self.schedule_queue.update(
+                    schedule_id, next_time, schedule_event, name=schedule_unique_name
+                )
+            except ScheduleNameConflict:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Another schedule already has client {schedule_unique_name}",
+                )
+
+            if count == 0:
+                raise HTTPException(status_code=404, detail="Item not found")
+
+            return self.schedule_result(schedule_event, client_info, schedule_id)
         except Exception as ex:
             log_error(f"Exception: {ex}")
             raise ex
@@ -274,10 +333,8 @@ class Scheduler:
                 client_type,
             )
 
+            # nothing matched is not an error - the answer is count 0
             found_count = len(delete_list)
-
-            if found_count == 0:
-                raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
             raise ex
@@ -318,9 +375,6 @@ class Scheduler:
                 client_key,
                 client_type,
             )
-
-            if len(found_schedules) == 0:
-                raise HTTPException(status_code=404, detail="Item not found")
 
         except Exception as ex:
             log_error(f"Exception: {ex}")

@@ -9,6 +9,21 @@ from schedule_queue.queue_abstraction import ScheduleQueue
 from config import Config
 
 
+class ScheduleNameConflict(Exception):
+    """another schedule already holds the client name (application,group,type,key,operation)"""
+
+
+def split_client_name(name: str):
+    """
+    'application,group,type,key,operation' -> dict, or None when the name is not in that form
+
+    """
+    parts = name.split(",") if type(name) == str else []
+    if len(parts) != 5:
+        return None
+    return dict(zip(("application", "group", "type", "key", "operation"), parts))
+
+
 class PGScheduleQueue(ScheduleQueue):
     SCHEDULE_TABLE = Config.scheduler_table() or "schedule_queue"
 
@@ -139,6 +154,7 @@ class PGScheduleQueue(ScheduleQueue):
         except Exception as ex:
             print(ex, file=sys.stderr)
             self.dbconn.rollback()
+            raise ex
 
     def delete_with_id(self, id):
         self.check_database_initialized()
@@ -211,7 +227,8 @@ class PGScheduleQueue(ScheduleQueue):
                 fetch_results = cursor.fetchall()
         except Exception as ex:
             print(ex, file=sys.stderr)
-            fetch_results = None
+            self.dbconn.rollback()
+            raise ex
 
         assert len(fetch_results) <= 1
 
@@ -246,7 +263,8 @@ class PGScheduleQueue(ScheduleQueue):
                 fetch_results = cursor.fetchall()
         except Exception as ex:
             print(ex, file=sys.stderr)
-            fetch_results = None
+            self.dbconn.rollback()
+            raise ex
 
         assert len(fetch_results) <= 1
 
@@ -272,38 +290,32 @@ class PGScheduleQueue(ScheduleQueue):
         
         """
 
-        results = list()
-
         try:
             with self.dbconn.cursor() as cursor:
                 cursor.execute(sql_get)
                 fetch_results = cursor.fetchall()
-
-                for fetch_result in fetch_results:
-                    fetched_name = fetch_result[1]
-                    [
-                        fetched_application,
-                        fetched_group,
-                        fetched__type,
-                        fetched_key,
-                        fetched_operation,
-                    ] = fetched_name.split(",")
-
-                results = [
-                    fetch_result
-                    for fetch_result in fetch_results
-                    if (not client_operation or fetched_operation == client_operation)
-                    and (
-                        not client_application
-                        or fetched_application == client_application
-                    )
-                    and (not client_group or fetched_group == client_group)
-                    and (not client_key or fetched_key == client_key)
-                    and (not client_type or fetched__type == client_type)
-                ]
         except Exception as ex:
             print(ex, file=sys.stderr)
-            results = None
+            self.dbconn.rollback()
+            # a failed read must not look like "no schedules" to the caller
+            raise ex
+
+        wanted = {
+            "application": client_application,
+            "group": client_group,
+            "type": client_type,
+            "key": client_key,
+            "operation": client_operation,
+        }
+
+        results = list()
+        # filter each row by its own name
+        for fetch_result in fetch_results:
+            client = split_client_name(fetch_result[1])
+            if client is None:
+                continue
+            if all(not value or client[field] == value for field, value in wanted.items()):
+                results.append(fetch_result)
 
         return [
             self._generate_schedule_dict(result[0], result[2]) for result in results
@@ -341,11 +353,14 @@ class PGScheduleQueue(ScheduleQueue):
             for pop_result in pop_results
         ]
 
-    def update(self, id, next_schedule, payload):
+    def update(self, id, next_schedule, payload, name=None) -> int:
         """
         기존 존재하는 id의 schedule을 업데이트한다.
         업데이트된 schedule은 다음번에 pop될 때 반영될 수 있도록, processing_started_at 컬럼을 초기화(NULL)한다.
         이렇게 초기화된 schedule은 다음번에 pop될 때 반영된다.
+
+        name 이 주어지면 name(client 정보) 도 바꾼다.
+        바뀐 행의 수(0 또는 1)를 돌려준다. 다른 schedule 이 이미 그 name 을 쓰면 ScheduleNameConflict.
 
         """
 
@@ -356,18 +371,32 @@ class PGScheduleQueue(ScheduleQueue):
 
         payload_str = json.dumps(payload) if type(payload) == dict else payload
 
-        sql_update = f"""
-        UPDATE {table_name} SET next_schedule = %s, processing_started_at = NULL, payload = %s where id = %s;
-        """
+        if name is None:
+            sql_update = f"""
+            UPDATE {table_name} SET next_schedule = %s, processing_started_at = NULL, payload = %s where id = %s;
+            """
+            params = (next_schedule, payload_str, id)
+        else:
+            sql_update = f"""
+            UPDATE {table_name} SET name = %s, next_schedule = %s, processing_started_at = NULL, payload = %s where id = %s;
+            """
+            params = (name, next_schedule, payload_str, id)
         print("UPDATE next_schedule: ", datetime.fromtimestamp(next_schedule))
 
         try:
             with self.dbconn.cursor() as cursor:
-                cursor.execute(sql_update, (next_schedule, payload_str, id))
+                cursor.execute(sql_update, params)
+                count = cursor.rowcount
             self.dbconn.commit()
+        except pg2.errors.UniqueViolation as ex:
+            self.dbconn.rollback()
+            raise ScheduleNameConflict(name) from ex
         except Exception as ex:
             print(ex, file=sys.stderr)
             self.dbconn.rollback()
+            raise ex
+
+        return count
 
     def initialize(self) -> None:
         """

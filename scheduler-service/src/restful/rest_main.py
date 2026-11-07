@@ -3,6 +3,7 @@ from typing import Optional
 
 from restful.rest_method import (
     restapi_register,
+    restapi_update,
     restapi_delete_schedule_with_id,
     restapi_delete_schedule_with_client,
     restapi_get_schedules_with_id,
@@ -46,9 +47,9 @@ async def register_schedule(inputs: Schedule) -> ScheduleResult:
 @fast_api.post("/schedules/{id}/update")
 async def update_schedule(id: str, inputs: Schedule) -> ScheduleResult:
     """
-    register a schedule event
+    replace the schedule with this id (payload, client and next run time)
     """
-    return restapi_register(inputs)
+    return restapi_update(id, inputs)
 
 
 @fast_api.delete("/schedules/{id}")
@@ -82,7 +83,7 @@ async def get_schedules(
     operation: str = "",
 ) -> list:
     """
-    list all registered events
+    list registered events matching the client filter ([] when none match)
     """
     return restapi_get_schedules_with_client(operation, application, group, key, type)
 
